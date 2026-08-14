@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>myREWRD TV Box — Pairing</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0e1a;
+      color: white;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .container {
+      text-align: center;
+      max-width: 600px;
+      padding: 40px;
+    }
+    .logo {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 32px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: 900;
+      color: white;
+    }
+    h1 {
+      font-size: 42px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #10b981, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 18px;
+      color: #94a3b8;
+      margin-bottom: 48px;
+    }
+    .pairing-code {
+      font-size: 64px;
+      font-weight: 900;
+      letter-spacing: 12px;
+      color: #fbbf24;
+      margin-bottom: 24px;
+      font-family: 'Courier New', monospace;
+    }
+    .instructions {
+      font-size: 16px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .instructions strong {
+      color: #e2e8f0;
+    }
+    .manual-entry {
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid #1e293b;
+    }
+    .manual-entry label {
+      font-size: 14px;
+      color: #64748b;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .token-input {
+      background: #1e293b;
+      border: 2px solid #334155;
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-size: 18px;
+      color: white;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .token-input:focus {
+      border-color: #10b981;
+    }
+    .pair-btn {
+      margin-top: 16px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      border-radius: 12px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+    .pair-btn:hover { transform: scale(1.03); }
+    .pair-btn:active { transform: scale(0.97); }
+    .status {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #10b981;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">RW</div>
+    <h1>myREWRD TV Box</h1>
+    <p class="subtitle">Connect this device to your venue dashboard</p>
+    
+    <div class="instructions">
+      <p>Go to your <strong>myREWRD Dashboard</strong> → <strong>TV Board</strong> → <strong>Pair Device</strong></p>
+      <p>Enter the code shown below, or paste your TV token directly.</p>
+    </div>
+
+    <div class="manual-entry">
+      <label>Enter your TV Token</label>
+      <input type="text" class="token-input" id="tokenInput" placeholder="tv_a3f8c2d1e4b7..." />
+      <br>
+      <button class="pair-btn" id="pairBtn">Pair Device</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <script>
+    const pairBtn = document.getElementById('pairBtn');
+    const tokenInput = document.getElementById('tokenInput');
+    const status = document.getElementById('status');
+
+    pairBtn.addEventListener('click', async () => {
+      const token = tokenInput.value.trim();
+      if (!token) {
+        status.textContent = 'Please enter a TV token';
+        status.style.color = '#ef4444';
+        return;
+      }
+      status.textContent = 'Pairing...';
+      status.style.color = '#fbbf24';
+      
+      // Validate token by trying to fetch data
+      try {
+        window.tvBox.pairWithToken(token);
+        status.textContent = 'Paired successfully! Loading TV Board...';
+        status.style.color = '#10b981';
+      } catch (e) {
+        status.textContent = 'Failed to pair. Check your token.';
+        status.style.color = '#ef4444';
+      }
+    });
+
+    tokenInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') pairBtn.click();
+    });
+  </script>
+</body>
+</html>

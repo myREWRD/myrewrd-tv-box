@@ -1,0 +1,38 @@
+{
+  "name": "myrewrd-tv-box",
+  "version": "1.0.0",
+  "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.myrewrd.tvbox",
+    "productName": "myREWRD TV Box",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "AudioVideo"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.0"
+  }
+}
