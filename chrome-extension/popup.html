@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 320px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f172a; color: #e2e8f0; }
+    h1 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+    h1 span { font-size: 20px; }
+    .field { margin-bottom: 12px; }
+    label { display: block; font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    input { width: 100%; padding: 8px 10px; border: 1px solid #334155; border-radius: 6px; background: #1e293b; color: #e2e8f0; font-size: 13px; box-sizing: border-box; }
+    input:focus { outline: none; border-color: #f59e0b; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn-primary { background: #f59e0b; color: #0f172a; }
+    .btn-primary:hover { background: #d97706; }
+    .btn-danger { background: #dc2626; color: white; }
+    .btn-danger:hover { background: #b91c1c; }
+    .status { margin-top: 12px; padding: 8px; border-radius: 6px; font-size: 12px; text-align: center; }
+    .status.active { background: #065f46; color: #6ee7b7; }
+    .status.inactive { background: #1e293b; color: #94a3b8; }
+    .sponsor-preview { margin-top: 12px; padding: 8px; background: #1e293b; border-radius: 6px; font-size: 11px; color: #94a3b8; }
+    .sponsor-preview .name { color: #f59e0b; font-weight: 700; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1><span>🏈</span> myREWRD Game Day</h1>
+  
+  <div class="field">
+    <label>TV Token</label>
+    <input type="text" id="token" placeholder="tv_xxxxxxxxxxxxxxxx" />
+  </div>
+
+  <button class="btn btn-primary" id="activate">Activate Sponsor Overlay</button>
+  <button class="btn btn-danger" id="deactivate" style="display:none;">Deactivate Overlay</button>
+
+  <div class="status inactive" id="status">Overlay inactive</div>
+
+  <div class="sponsor-preview" id="preview" style="display:none;">
+    <div>Current sponsor:</div>
+    <div class="name" id="sponsor-name"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
