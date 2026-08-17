@@ -1,0 +1,41 @@
+name: Build Windows Portable
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Build portable exe
+        run: npm run build:win-portable
+        
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myREWRD-TV-Box-Windows
+          path: dist/*.exe
+          
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: TV Box v1.0.${{ github.run_number }}
+          files: dist/*.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
