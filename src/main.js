@@ -4,7 +4,6 @@
 const { app, BrowserWindow, BrowserView, ipcMain, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const WebSocket = require("ws");
 
 // ─── Config & State ─────────────────────────────────────────────────────────
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
@@ -13,7 +12,6 @@ const API_BASE = "https://app.myrewrd.com";
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
 let overlayWindow = null; // Transparent overlay for sponsor bar
-let ws = null;
 let config = loadConfig();
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday'
 let sponsorData = null;
@@ -149,7 +147,6 @@ function startGameDayMode(options = {}) {
 async function fetchSponsorData() {
   if (!config.tvToken) return;
   try {
-    const fetch = (await import("node-fetch")).default;
     const res = await fetch(
       `${API_BASE}/api/tv-sponsor?token=${config.tvToken}`
     );
@@ -170,7 +167,7 @@ async function fetchSponsorData() {
 setInterval(fetchSponsorData, 5 * 60 * 1000);
 
 // ─── WebSocket Connection (Real-time Dashboard Control) ─────────────────────
-function connectWebSocket() {
+function startPolling() {
   if (!config.tvToken) return;
 
   const wsUrl = `wss://app.myrewrd.com/api/tv-ws?token=${config.tvToken}`;
@@ -288,7 +285,7 @@ ipcMain.handle("get-sponsor", () => sponsorData);
 
 ipcMain.on("pair-with-token", (event, token) => {
   saveConfig({ tvToken: token, paired: true });
-  connectWebSocket();
+  startPolling();
   switchMode("regular");
 });
 
@@ -301,7 +298,7 @@ app.whenReady().then(() => {
   createMainWindow();
 
   if (config.paired && config.tvToken) {
-    connectWebSocket();
+    startPolling();
     fetchSponsorData();
   }
 });
