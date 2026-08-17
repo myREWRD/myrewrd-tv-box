@@ -1,17 +1,29 @@
 // background.js — Service Worker that polls /api/tv-box-command every 5 seconds
-// and sends messages to the content script to show/hide the sponsor overlay
-
 const POLL_INTERVAL_MS = 5000;
 let pollTimer = null;
 let lastMode = null;
 
-// Get the stored TV token
 async function getToken() {
+  // First check chrome.storage.local (set via popup or config)
   const data = await chrome.storage.local.get(["tvToken"]);
-  return data.tvToken || null;
+  if (data.tvToken) return data.tvToken;
+  
+  // Fallback: try to read from config.json bundled with extension
+  try {
+    const res = await fetch(chrome.runtime.getURL("config.json"));
+    if (res.ok) {
+      const config = await res.json();
+      if (config.token) {
+        // Save it to storage so we don't read the file every time
+        await chrome.storage.local.set({ tvToken: config.token });
+        return config.token;
+      }
+    }
+  } catch {}
+  
+  return null;
 }
 
-// Poll the API for current mode
 async function pollCommand() {
   const token = await getToken();
   if (!token) return;
@@ -23,7 +35,6 @@ async function pollCommand() {
     if (!res.ok) return;
     const data = await res.json();
 
-    // Store the current state
     await chrome.storage.local.set({
       currentMode: data.mode,
       showOverlay: data.show_overlay,
@@ -34,7 +45,7 @@ async function pollCommand() {
       streamUrl: data.stream_url,
     });
 
-    // Send message to all tabs with content script
+    // Send message to all tabs
     const tabs = await chrome.tabs.query({});
     for (const tab of tabs) {
       try {
@@ -47,21 +58,14 @@ async function pollCommand() {
             text: data.overlay_text,
           },
         });
-      } catch (e) {
-        // Tab might not have content script loaded
-      }
+      } catch {}
     }
 
-    // If mode changed, handle navigation
+    // Handle mode changes — navigate back to TV Board when switching to regular
     if (lastMode && lastMode !== data.mode) {
       const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (activeTabs[0]) {
-        if (data.mode === "regular" && data.tv_board_url) {
-          // Switch back to TV Board
-          chrome.tabs.update(activeTabs[0].id, { url: data.tv_board_url });
-        }
-        // For stream/gameday, the venue navigates to their streaming service manually
-        // The overlay will auto-activate on whatever page they're on
+      if (activeTabs[0] && data.mode === "regular" && data.tv_board_url) {
+        chrome.tabs.update(activeTabs[0].id, { url: data.tv_board_url });
       }
     }
     lastMode = data.mode;
@@ -70,25 +74,15 @@ async function pollCommand() {
   }
 }
 
-// Start polling
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(pollCommand, POLL_INTERVAL_MS);
-  pollCommand(); // Initial poll
+  pollCommand();
 }
 
-// Listen for token changes
 chrome.storage.onChanged.addListener((changes) => {
-  if (changes.tvToken) {
-    lastMode = null;
-    startPolling();
-  }
+  if (changes.tvToken) { lastMode = null; startPolling(); }
 });
 
-// Start on install/update
-chrome.runtime.onInstalled.addListener(() => {
-  startPolling();
-});
-
-// Start on service worker wake
+chrome.runtime.onInstalled.addListener(() => { startPolling(); });
 startPolling();
