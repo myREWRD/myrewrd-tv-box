@@ -1,10 +1,13 @@
 {
   "manifest_version": 3,
   "name": "myREWRD Game Day",
-  "version": "1.0.0",
-  "description": "Sponsor overlay for live game streams on venue TVs",
-  "permissions": ["storage", "activeTab"],
+  "version": "2.0.0",
+  "description": "Auto-activating sponsor overlay for venue TV boxes. Polls for mode changes and displays sponsor bar during Game Day.",
+  "permissions": ["storage", "activeTab", "alarms"],
   "host_permissions": ["https://app.myrewrd.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
