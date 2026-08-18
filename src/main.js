@@ -17,12 +17,27 @@ let currentMode = "regular"; // 'regular' | 'stream' | 'gameday'
 let sponsorData = null;
 
 function loadConfig() {
+  // Check primary location (AppData)
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
     }
   } catch (e) {
-    console.error("Failed to load config:", e);
+    console.error("Failed to load config from AppData:", e);
+  }
+  // Check local app directory (where .bat setup script writes config.json)
+  const localConfig = path.join(path.dirname(process.execPath), "config.json");
+  try {
+    if (fs.existsSync(localConfig)) {
+      const data = JSON.parse(fs.readFileSync(localConfig, "utf-8"));
+      // Migrate to AppData location for future reads
+      fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
+      console.log("[TV Box] Migrated config from local dir to AppData");
+      return data;
+    }
+  } catch (e) {
+    console.error("Failed to load config from local dir:", e);
   }
   return { tvToken: null, venueId: null, venueName: null, paired: false };
 }
