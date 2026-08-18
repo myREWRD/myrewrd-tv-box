@@ -25,19 +25,27 @@ function loadConfig() {
   } catch (e) {
     console.error("Failed to load config from AppData:", e);
   }
-  // Check local app directory (where .bat setup script writes config.json)
-  const localConfig = path.join(path.dirname(process.execPath), "config.json");
-  try {
-    if (fs.existsSync(localConfig)) {
-      const data = JSON.parse(fs.readFileSync(localConfig, "utf-8"));
-      // Migrate to AppData location for future reads
-      fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-      fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
-      console.log("[TV Box] Migrated config from local dir to AppData");
-      return data;
+  // Check all possible locations where .bat setup script writes config.json
+  const searchPaths = [
+    path.join(path.dirname(process.execPath), "config.json"),
+    "C:\\Users\\myrewrd\\myREWRD-TV-Box\\config.json",
+    path.join(process.env.USERPROFILE || "", "myREWRD-TV-Box", "config.json"),
+  ];
+  for (const p of searchPaths) {
+    try {
+      if (p && fs.existsSync(p)) {
+        const data = JSON.parse(fs.readFileSync(p, "utf-8"));
+        if (data.tvToken) {
+          // Migrate to AppData location for future reads
+          fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+          fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
+          console.log("[TV Box] Found config at", p, "- migrated to AppData");
+          return data;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load config from", p, e);
     }
-  } catch (e) {
-    console.error("Failed to load config from local dir:", e);
   }
   return { tvToken: null, venueId: null, venueName: null, paired: false };
 }
