@@ -189,51 +189,57 @@ async function fetchSponsorData() {
 // Refresh sponsor data every 5 minutes
 setInterval(fetchSponsorData, 5 * 60 * 1000);
 
-// ─── WebSocket Connection (Real-time Dashboard Control) ─────────────────────
+// ─── HTTP Polling (Dashboard Control) ────────────────────────────────────────
+let pollInterval = null;
 function startPolling() {
   if (!config.tvToken) return;
-
-  const wsUrl = `wss://app.myrewrd.com/api/tv-ws?token=${config.tvToken}`;
-  console.log("[TV Box] Connecting WebSocket...");
-
-  ws = new WebSocket(wsUrl);
-
-  ws.on("open", () => {
-    console.log("[TV Box] WebSocket connected");
-    // Send heartbeat with current state
-    sendState();
-  });
-
-  ws.on("message", (data) => {
-    try {
-      const msg = JSON.parse(data.toString());
-      handleCommand(msg);
-    } catch (e) {
-      console.error("[TV Box] Invalid WebSocket message:", e);
-    }
-  });
-
-  ws.on("close", () => {
-    console.log("[TV Box] WebSocket disconnected, reconnecting in 5s...");
-    setTimeout(connectWebSocket, 5000);
-  });
-
-  ws.on("error", (err) => {
-    console.error("[TV Box] WebSocket error:", err.message);
-  });
+  console.log("[TV Box] Starting HTTP polling for commands...");
+  pollForCommands();
+  pollInterval = setInterval(pollForCommands, 5000);
 }
 
-function sendState() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(
-      JSON.stringify({
-        type: "state",
-        mode: currentMode,
-        paired: config.paired,
-        venueName: config.venueName,
-        version: app.getVersion(),
-      })
+async function pollForCommands() {
+  if (!config.tvToken) return;
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/tv-box-command?token=${config.tvToken}`
     );
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Handle pending command from venue app (e.g., navigate to Hulu)
+    if (data.pending_command) {
+      let cmd;
+      try {
+        cmd = typeof data.pending_command === "string"
+          ? JSON.parse(data.pending_command)
+          : data.pending_command;
+      } catch { cmd = null; }
+
+      if (cmd && cmd.type) {
+        console.log("[TV Box] Received command:", cmd.type, cmd.url || "");
+        handleCommand(cmd);
+        // Acknowledge command (clear it from DB)
+        fetch(`${API_BASE}/api/tv-box-command`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: config.tvToken, action: "ack_command" }),
+        }).catch(() => {});
+      }
+    }
+
+    // Handle mode changes from dashboard/app
+    if (data.mode && data.mode !== currentMode) {
+      console.log("[TV Box] Mode changed:", currentMode, "->", data.mode);
+      const options = {};
+      if (data.stream_url) options.streamUrl = data.stream_url;
+      if (data.sponsor_name) options.sponsorName = data.sponsor_name;
+      if (data.sponsor_logo) options.sponsorLogo = data.sponsor_logo;
+      if (data.overlay_text) options.overlayText = data.overlay_text;
+      switchMode(data.mode, options);
+    }
+  } catch (e) {
+    console.error("[TV Box] Poll error:", e.message);
   }
 }
 
@@ -259,8 +265,11 @@ function handleCommand(msg) {
 
     case "navigate":
       // Navigate the stream view to a specific URL
-      if (streamView) {
+      if (streamView && streamView.webContents) {
         streamView.webContents.loadURL(msg.url);
+      } else {
+        // If no stream view exists, load URL in main window
+        mainWindow.loadURL(msg.url);
       }
       break;
 
@@ -293,7 +302,7 @@ function handleCommand(msg) {
       break;
 
     case "ping":
-      sendState();
+      // No-op for HTTP polling
       break;
 
     default:
