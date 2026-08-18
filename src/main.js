@@ -71,7 +71,7 @@ function createMainWindow() {
 
   // Start in pairing mode or regular TV board
   if (!config.paired || !config.tvToken) {
-    mainWindow.loadFile(path.join(__dirname, "pages", "pairing.html"));
+    mainWindow.loadURL(`${API_BASE}/tv/pair`);
   } else {
     switchMode(currentMode);
   }
@@ -281,7 +281,7 @@ function handleCommand(msg) {
 
     case "unpair":
       saveConfig({ tvToken: null, venueId: null, venueName: null, paired: false });
-      mainWindow.loadFile(path.join(__dirname, "pages", "pairing.html"));
+      mainWindow.loadURL(`${API_BASE}/tv/pair`);
       break;
 
     case "ping":
@@ -311,6 +311,18 @@ ipcMain.on("switch-mode", (event, mode, options) => {
 // ─── App Lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createMainWindow();
+
+  // Watch for navigation from /tv/pair to /tv/[token] (pairing complete)
+  mainWindow.webContents.on("did-navigate", (event, url) => {
+    const tvMatch = url.match(/\/tv\/(tv_[a-f0-9]+)/);
+    if (tvMatch && tvMatch[1] && !config.paired) {
+      const token = tvMatch[1];
+      saveConfig({ tvToken: token, paired: true });
+      console.log("[TV Box] Paired via PIN! Token:", token);
+      startPolling();
+      fetchSponsorData();
+    }
+  });
 
   if (config.paired && config.tvToken) {
     startPolling();
