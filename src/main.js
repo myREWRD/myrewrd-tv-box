@@ -1,13 +1,18 @@
 // myREWRD TV Box — Main Electron Process
-// Manages: pairing, mode switching, WebSocket control, DRM streaming, sponsor overlay
+// Manages: pairing, mode switching, HTTP polling control, DRM streaming, sponsor overlay, auto-update
 
 const { app, BrowserWindow, BrowserView, ipcMain, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { execFile } = require("child_process");
+const https = require("https");
+const http = require("http");
 
 // ─── Config & State ─────────────────────────────────────────────────────────
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
 const API_BASE = "https://app.myrewrd.com";
+const APP_VERSION = app.getVersion(); // reads from package.json "version"
+const INSTALL_DIR = "C:\\Users\\myrewrd\\myREWRD-TV-Box";
 
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
@@ -15,6 +20,7 @@ let overlayWindow = null; // Transparent overlay for sponsor bar
 let config = loadConfig();
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday'
 let sponsorData = null;
+let isUpdating = false; // Prevent multiple simultaneous updates
 
 function loadConfig() {
   // Check primary location (AppData)
@@ -238,9 +244,112 @@ async function pollForCommands() {
       if (data.overlay_text) options.overlayText = data.overlay_text;
       switchMode(data.mode, options);
     }
+
+    // Check for updates
+    if (data.latest_version && data.update_url) {
+      checkForUpdate(data.latest_version, data.update_url, data.force_update);
+    }
   } catch (e) {
     console.error("[TV Box] Poll error:", e.message);
   }
+}
+
+// ─── Auto-Update System ─────────────────────────────────────────────────────
+function compareVersions(current, latest) {
+  const c = current.split(".").map(Number);
+  const l = latest.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((l[i] || 0) > (c[i] || 0)) return 1;  // latest is newer
+    if ((l[i] || 0) < (c[i] || 0)) return -1; // current is newer
+  }
+  return 0; // same
+}
+
+async function checkForUpdate(latestVersion, downloadUrl, forceUpdate) {
+  if (isUpdating) return;
+  if (compareVersions(APP_VERSION, latestVersion) <= 0) return; // already up to date
+
+  console.log(`[TV Box] Update available: ${APP_VERSION} -> ${latestVersion}`);
+  isUpdating = true;
+
+  try {
+    const newExeName = `myREWRD.TV.Box.${latestVersion}.exe`;
+    const downloadPath = path.join(INSTALL_DIR, newExeName + ".downloading");
+    const finalPath = path.join(INSTALL_DIR, newExeName);
+
+    // Download the new exe
+    console.log("[TV Box] Downloading update from:", downloadUrl);
+    await downloadFile(downloadUrl, downloadPath);
+
+    // Verify download (must be > 10MB to be valid)
+    const stats = fs.statSync(downloadPath);
+    if (stats.size < 10 * 1024 * 1024) {
+      console.error("[TV Box] Downloaded file too small, aborting update");
+      fs.unlinkSync(downloadPath);
+      isUpdating = false;
+      return;
+    }
+
+    // Rename download to final name
+    if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
+    fs.renameSync(downloadPath, finalPath);
+    console.log("[TV Box] Update downloaded successfully:", finalPath);
+
+    // Update the startup shortcut to point to new exe
+    const startupDir = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup");
+    const batPath = path.join(startupDir, "myREWRD-TV-Box.bat");
+    fs.writeFileSync(batPath, `@echo off\r\nstart "" "${finalPath}"\r\n`);
+
+    // Remove old exe (current running one will be removed after restart)
+    const currentExe = process.execPath;
+    const oldExeName = path.basename(currentExe);
+    if (oldExeName !== newExeName) {
+      // Schedule deletion of old exe after restart
+      const cleanupBat = path.join(INSTALL_DIR, "cleanup.bat");
+      fs.writeFileSync(cleanupBat,
+        `@echo off\r\nping 127.0.0.1 -n 3 >nul\r\ndel "${currentExe}" 2>nul\r\ndel "%~f0"\r\n`
+      );
+    }
+
+    console.log("[TV Box] Restarting with new version...");
+    // Launch new exe and quit current
+    execFile(finalPath, { detached: true, stdio: "ignore" });
+    app.quit();
+
+  } catch (e) {
+    console.error("[TV Box] Update failed:", e.message);
+    isUpdating = false;
+  }
+}
+
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath);
+    const request = (url.startsWith("https") ? https : http).get(url, (response) => {
+      // Handle redirects (GitHub releases redirect)
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        file.close();
+        fs.unlinkSync(destPath);
+        return downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
+      }
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync(destPath);
+        return reject(new Error(`HTTP ${response.statusCode}`));
+      }
+      response.pipe(file);
+      file.on("finish", () => { file.close(); resolve(); });
+    });
+    request.on("error", (err) => {
+      file.close();
+      if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+      reject(err);
+    });
+    request.setTimeout(300000, () => { // 5 min timeout
+      request.destroy();
+      reject(new Error("Download timeout"));
+    });
+  });
 }
 
 // ─── Command Handler (from Dashboard/App) ───────────────────────────────────
