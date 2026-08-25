@@ -13,6 +13,29 @@
 | Older deployed-client compatibility | |
 | Dashboard/venue-app dependency | |
 
+## Knowledge Impact
+
+- [ ] I checked whether this change affects durable platform knowledge.
+- [ ] **No documentation update is required** because behavior/contracts did not change.
+- [ ] **Documentation was updated** in this PR.
+- [ ] Generated knowledge/reference files were refreshed where required.
+- [ ] Relevant architecture/product/database/infrastructure/operations docs were reviewed.
+- [ ] Cross-repository impact was considered.
+
+Choose exactly one of the two bold documentation paths above. Explain the decision:
+
+## Regression Impact
+
+- [ ] Authentication reviewed if relevant
+- [ ] Authorization/roles reviewed if relevant
+- [ ] Multi-venue isolation reviewed if relevant
+- [ ] API compatibility reviewed if relevant
+- [ ] Database/RPC/RLS impact reviewed if relevant
+- [ ] Mobile runtime/native/OTA impact reviewed if relevant
+- [ ] Deployment/release impact reviewed if relevant
+- [ ] Installed-client compatibility reviewed if relevant
+- [ ] Required independent/human review is identified
+
 ## Security and privacy
 
 - [ ] Repository remains public

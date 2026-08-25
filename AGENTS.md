@@ -4,9 +4,17 @@
 
 ## Platform source of truth
 
-Canonical cross-platform documentation lives in `myREWRD/ssdt-dashboard/docs/`. Read `docs/product/TV_AND_LIVE_GAMES.md`, `docs/architecture/DATA_FLOW.md`, `docs/operations/DEPLOYMENT.md`, `docs/security/SECURITY_AUDIT_2026-08-25.md`, and the dashboard Knowledge Pack before changing device APIs, commands, tokens, TV routes, or release behavior.
+Canonical cross-platform documentation lives in `myREWRD/ssdt-dashboard/docs/`. Begin with `myREWRD/ssdt-dashboard/AGENTS.md` and `myREWRD/ssdt-dashboard/docs/README.md`, then read `docs/product/TV_AND_LIVE_GAMES.md`, `docs/architecture/DATA_FLOW.md`, `docs/operations/DEPLOYMENT.md`, `docs/security/SECURITY_AUDIT_2026-08-25.md`, and the Knowledge Pack before changing device APIs, commands, tokens, TV routes, or release behavior.
 
-Verify current dashboard source and live configuration. Never infer a command, endpoint, venue token format, or updater contract from this README alone.
+Use this evidence order: **verified live state → current config on `origin/main` → current source on `origin/main` → Git history → repository documentation → AI memory, previous chats, old summaries, or unstaged local context**. Never infer a command, endpoint, venue token format, or updater contract from this README alone. When evidence conflicts, identify it, determine verified current/intended behavior, and update durable GitHub knowledge in the same pull request when appropriate.
+
+## Mandatory Pre-Task Workflow
+
+Before implementation, identify affected repositories/services; read this guide and relevant dashboard canonical docs; fetch and fast-forward current `origin/main`; inspect current client/API/updater implementation and Git history when rationale is unclear; identify device/venue scope, public-display privacy, older AppData/payload compatibility, Windows/updater/release, hardware/unattended, dashboard, and knowledge impact; and define validation, recovery, and review. Do not publish or download-run untrusted artifacts during investigation.
+
+## Mandatory Knowledge Maintenance
+
+Every task must assess durable impact on pairing, commands, device/venue authorization, TV modes, public payloads, updater/release contracts, AppData/config formats, hardware, and dashboard APIs. When affected, update repository and dashboard documentation/generated references in the **same pull request**. A task is incomplete when code changes but durable knowledge remains stale; important findings must not remain only in chat. This applies to every agent and human developer.
 
 ## Architecture
 
@@ -53,6 +61,12 @@ There is no committed lockfile and no automated test/lint/type-check script at t
 
 Manual Windows validation must cover clean pairing, saved configuration, every command, Regular/Stream/Game Day/Live Games modes, wrong token/device, offline/reconnect, streaming session persistence, power-loss restart, previous-version update, valid/invalid release download, and uninstall/reinstall recovery.
 
+## Mandatory Post-Task Workflow
+
+Before completion, confirm the diff is limited to approved scope; pairing, device/venue/invalid-token cases, commands/modes, privacy, offline/reconnect/restart, older config/payloads, Windows artifact, actual updater path, release consequence, and recovery were checked where relevant; no secret or unauthorized release occurred; docs/generated references were updated and verified; and the PR states code, knowledge, release, and device-recovery impact.
+
+Authentication/authorization, device tokens, dashboard APIs, updater/release workflows, Windows artifacts, navigation/privacy, secrets, deployment infrastructure, or destructive behavior require human review or a **second independent AI review** of the actual diff/current code plus human approval before production.
+
 ## Pull request and release
 
 Fetch and fast-forward, branch, match current repository author convention, and open a PR. Include dashboard/API compatibility, configuration migration, public-display privacy, Windows test evidence, updater/release effect, and recovery.
@@ -61,4 +75,4 @@ After an approved release, download through the actual public updater/installer 
 
 ## Documentation maintenance
 
-Update this repository and the dashboard TV/operations documentation for command, pairing, token, mode, release, updater, or hardware assumptions. Record reasoning and rejected alternatives in the dashboard Knowledge Pack.
+Update this repository and the dashboard TV/operations documentation for command, pairing, token, mode, release, updater, or hardware assumptions. Record reasoning and rejected alternatives in the dashboard Knowledge Pack. Run relevant Knowledge Pack/documentation checks before completion.

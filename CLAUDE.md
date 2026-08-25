@@ -1,18 +1,20 @@
 # CLAUDE.md — myREWRD TV Box
 
-Read [`AGENTS.md`](AGENTS.md) in full. Cross-platform TV and operations documentation lives in `myREWRD/ssdt-dashboard/docs/`.
+This file is **not a separate knowledge base**. Read [`AGENTS.md`](AGENTS.md) in full. Use `myREWRD/ssdt-dashboard/docs/README.md` as the canonical cross-platform documentation index.
 
 ## Essential rules
 
 1. Keep this repository public; deployed installers/updaters require unauthenticated release downloads.
-2. Fetch and fast-forward `main`; use a branch and pull request; never push directly to `main`.
-3. Selected `main` pushes can publish a Windows release; obtain explicit release approval.
-4. The current control model is five-second HTTP polling, not WebSockets.
-5. Never expose TV tokens, pairing PINs, Wi-Fi data, streaming sessions, or credentials.
-6. Enforce device/venue scope and validate navigation/command payloads.
-7. Public TV payloads must exclude private identifiers, messages, payment data, credentials, and game answers.
-8. Preserve unattended operation and backwards-compatible AppData/config/command behavior.
-9. Test the Windows portable artifact, clean pairing, all commands, offline recovery, and actual public updater path.
-10. Update the dashboard Knowledge Pack when pairing, commands, display modes, release, updater, or hardware assumptions change.
+2. Complete the mandatory pre-task workflow in `AGENTS.md`; fetch and fast-forward `origin/main`, then use a branch and pull request.
+3. Apply the approved evidence order: verified live state → current config/source → Git history → repository documentation → AI memory/old chats/local unstaged context.
+4. Selected `main` pushes can publish a Windows release; obtain explicit release approval.
+5. The current control model is five-second HTTP polling, not WebSockets.
+6. Never expose TV tokens, pairing PINs, Wi-Fi data, streaming sessions, or credentials.
+7. Enforce device/venue scope; validate navigation/command payloads; exclude private data and game answers from public TV output.
+8. Preserve unattended operation and backward-compatible AppData/config/command behavior.
+9. Test the Windows portable artifact, clean pairing, commands/modes, invalid scope, offline recovery, and actual public updater path.
+10. Update repository and dashboard knowledge/generated references in the same PR when pairing, commands, display modes, release, updater, or hardware assumptions change.
+11. Require human review or a second independent AI review plus human approval for high-risk work defined in `AGENTS.md`.
+12. Complete the mandatory post-task workflow and state code, knowledge, Windows/release, and device-recovery impact in the PR.
 
 No branch protection, lockfile, or automated test suite existed at the 2026-08-25 audit. Procedure and explicit Windows regression evidence are mandatory.
