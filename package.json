@@ -1,6 +1,6 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
@@ -8,7 +8,8 @@
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
-    "build:win-portable": "electron-builder --win portable"
+    "build:win-portable": "electron-builder --win portable",
+    "verify:live-game-takeover": "node scripts/verify-live-game-takeover.mjs"
   },
   "build": {
     "appId": "com.myrewrd.tvbox",
