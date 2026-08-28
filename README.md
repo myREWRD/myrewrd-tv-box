@@ -11,6 +11,12 @@ The myREWRD TV Box is a remotely managed Electron application for Windows mini P
 | Game Day | Uses the 94% stream and 6% sponsor-bar layout required by the product |
 | Live Games | Displays sanitized server-controlled game state through the TV Board |
 
+## Game Day sponsor-logo compatibility
+
+The dashboard `/api/tv-sponsor` payload currently uses snake-case logo fields. The Electron main process normalizes both snake-case and camel-case payloads before sending sponsor data to the isolated renderer. The Game Day sponsor bar then tries the compact logo first, followed by medium and standard assets; each sponsor update uses a versioned off-DOM image probe so a slow or failed prior sponsor image cannot overwrite a newer rotation.
+
+This compatibility layer does not select sponsors, change rotation timing, or record impressions. Those responsibilities remain in the dashboard/API. A code merge alone does not put the fix on an installed box: the public Windows release and updater must deliver the new version, after which the physical Game Day sponsor bar must be verified.
+
 ## Architecture
 
 ```mermaid

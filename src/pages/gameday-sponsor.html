@@ -76,17 +76,45 @@
   </div>
 
   <script>
+    let sponsorRenderVersion = 0;
+
+    function loadSponsorLogo(logo, logoUrls, renderVersion, index = 0) {
+      if (renderVersion !== sponsorRenderVersion) return;
+      if (index >= logoUrls.length) {
+        logo.removeAttribute('src');
+        logo.style.display = 'none';
+        return;
+      }
+
+      const probe = new Image();
+      probe.onload = () => {
+        if (renderVersion !== sponsorRenderVersion) return;
+        logo.src = logoUrls[index];
+        logo.style.display = 'block';
+      };
+      probe.onerror = () => {
+        loadSponsorLogo(logo, logoUrls, renderVersion, index + 1);
+      };
+      probe.src = logoUrls[index];
+    }
+
+    function applySponsor(sponsor) {
+      if (!sponsor) return;
+      const renderVersion = ++sponsorRenderVersion;
+      document.getElementById('sponsorName').textContent = sponsor.name;
+      const logo = document.getElementById('sponsorLogo');
+      logo.alt = sponsor.name ? `${sponsor.name} logo` : '';
+      logo.removeAttribute('src');
+      logo.style.display = 'none';
+      const logoUrls = [sponsor.logoUrlCompact, sponsor.logoUrlMedium, sponsor.logoUrl]
+        .filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+      loadSponsorLogo(logo, logoUrls, renderVersion);
+    }
+
     async function loadSponsor() {
       try {
         const sponsor = await window.tvBox.getSponsor();
-        if (sponsor) {
-          document.getElementById('sponsorName').textContent = sponsor.name;
-          if (sponsor.logoUrl || sponsor.logoUrlMedium) {
-            const logo = document.getElementById('sponsorLogo');
-            logo.src = sponsor.logoUrlMedium || sponsor.logoUrl;
-            logo.style.display = 'block';
-          }
-        }
+        applySponsor(sponsor);
       } catch (e) {
         console.error('Failed to load sponsor:', e);
       }
@@ -97,16 +125,8 @@
 
     // Listen for updates from main process
     window.tvBox.onSponsorUpdate((sponsor) => {
-      if (sponsor) {
-        document.getElementById('sponsorName').textContent = sponsor.name;
-        if (sponsor.logoUrl || sponsor.logoUrlMedium) {
-          const logo = document.getElementById('sponsorLogo');
-          logo.src = sponsor.logoUrlMedium || sponsor.logoUrl;
-          logo.style.display = 'block';
-        }
-      }
+      applySponsor(sponsor);
     });
   </script>
 </body>
 </html>
-
