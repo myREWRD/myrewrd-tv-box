@@ -306,7 +306,7 @@ function compareVersions(current, latest) {
 
 async function checkForUpdate(latestVersion, downloadUrl, forceUpdate) {
   if (isUpdating) return;
-  if (compareVersions(APP_VERSION, latestVersion) <= 0) return; // already up to date
+  if (compareVersions(APP_VERSION, latestVersion) >= 0) return; // already up to date or newer
 
   console.log(`[TV Box] Update available: ${APP_VERSION} -> ${latestVersion}`);
   isUpdating = true;
