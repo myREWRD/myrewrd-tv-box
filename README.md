@@ -17,6 +17,8 @@ The dashboard `/api/tv-sponsor` payload currently uses snake-case logo fields. T
 
 This compatibility layer does not select sponsors, change rotation timing, or record impressions. Those responsibilities remain in the dashboard/API. A code merge alone does not put the fix on an installed box: the public Windows release and updater must deliver the new version, after which the physical Game Day sponsor bar must be verified.
 
+This change is targeted for TV Box version `1.0.3`. Version `1.0.2` is already the registered production updater target, so reusing it would not update a device that already reports `1.0.2`.
+
 ## Architecture
 
 ```mermaid

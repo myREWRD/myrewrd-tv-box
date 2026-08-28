@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const main = fs.readFileSync(path.join(root, "src/main.js"), "utf8");
 const overlay = fs.readFileSync(path.join(root, "src/pages/gameday-sponsor.html"), "utf8");
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const require = createRequire(import.meta.url);
 const { normalizeSponsorPayload, sponsorLogoCandidates } = require(path.join(root, "src/sponsor.js"));
 
@@ -43,5 +44,6 @@ assert.match(overlay, /renderVersion !== sponsorRenderVersion/);
 assert.match(overlay, /loadSponsorLogo\(logo, logoUrls, renderVersion, index \+ 1\)/);
 assert.match(overlay, /logo\.src = logoUrls\[index\]/);
 assert.doesNotMatch(overlay, /logo\.src\s*=\s*sponsor\.logoUrlMedium \|\| sponsor\.logoUrl/);
+assert.equal(packageJson.version, "1.0.3", "Game Day sponsor-logo release must be updater-deliverable as 1.0.3");
 
 console.log("Game Day sponsor logo normalization contract passed.");

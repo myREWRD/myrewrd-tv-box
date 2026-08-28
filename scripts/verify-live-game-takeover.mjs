@@ -17,7 +17,15 @@ expect(/version=\$\{encodeURIComponent\(APP_VERSION\)\}/, "TV Box heartbeat must
 expect(/if \(compareVersions\(APP_VERSION, latestVersion\) <= 0\) return;/, "TV Box updater must accept a strictly newer release and reject equal or older versions.");
 if (/if \(compareVersions\(APP_VERSION, latestVersion\) >= 0\) return;/.test(main)) failures.push("TV Box updater must not retain the reversed version gate.");
 
-if (packageJson.version !== "1.0.2") failures.push("TV Box recovery release must increment the updater version to 1.0.2.");
+const versionParts = String(packageJson.version).split(".").map(Number);
+if (
+  versionParts.length !== 3
+  || versionParts.some((part) => !Number.isInteger(part) || part < 0)
+  || versionParts[0] < 1
+  || (versionParts[0] === 1 && versionParts[1] === 0 && versionParts[2] < 2)
+) {
+  failures.push("TV Box updater version must retain the 1.0.2 recovery release or a newer semantic version.");
+}
 
 if (failures.length) {
   console.error("TV Box Live Games takeover regression check failed:");
