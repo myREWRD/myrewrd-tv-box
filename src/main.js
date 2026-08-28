@@ -215,7 +215,7 @@ async function pollForCommands() {
   if (!config.tvToken) return;
   try {
     const res = await fetch(
-      `${API_BASE}/api/tv-box-command?token=${config.tvToken}`
+      `${API_BASE}/api/tv-box-command?token=${encodeURIComponent(config.tvToken)}&version=${encodeURIComponent(APP_VERSION)}`
     );
     if (!res.ok) return;
     const data = await res.json();
@@ -306,7 +306,8 @@ function compareVersions(current, latest) {
 
 async function checkForUpdate(latestVersion, downloadUrl, forceUpdate) {
   if (isUpdating) return;
-  if (compareVersions(APP_VERSION, latestVersion) >= 0) return; // already up to date or newer
+  // compareVersions returns 1 only when latestVersion is strictly newer.
+  if (compareVersions(APP_VERSION, latestVersion) <= 0) return; // already up to date or newer
 
   console.log(`[TV Box] Update available: ${APP_VERSION} -> ${latestVersion}`);
   isUpdating = true;
