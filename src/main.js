@@ -7,6 +7,7 @@ const fs = require("fs");
 const { execFile } = require("child_process");
 const https = require("https");
 const http = require("http");
+const { normalizeSponsorPayload } = require("./sponsor");
 
 // ─── Config & State ─────────────────────────────────────────────────────────
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
@@ -188,7 +189,7 @@ async function fetchSponsorData() {
     );
     const data = await res.json();
     if (data.ok && data.found) {
-      sponsorData = data.sponsor;
+      sponsorData = normalizeSponsorPayload(data.sponsor);
       // Send to renderer
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("sponsor-update", sponsorData);
