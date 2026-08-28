@@ -18,7 +18,8 @@ let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
 let overlayWindow = null; // Transparent overlay for sponsor bar
 let config = loadConfig();
-let currentMode = "regular"; // 'regular' | 'stream' | 'gameday'
+let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
+let configuredMode = "regular";
 let sponsorData = null;
 let isUpdating = false; // Prevent multiple simultaneous updates
 
@@ -131,6 +132,12 @@ function switchMode(mode, options = {}) {
       startGameDayMode(options);
       break;
 
+    case "live-game":
+      // The tokenized TV Board owns Live Games presentation. It replaces the
+      // local Game Day BrowserView only while a venue game is actually active.
+      mainWindow.loadURL(`${API_BASE}/tv/${config.tvToken}`);
+      break;
+
     case "streaming-login":
       // Open a streaming service for the venue to log in
       const serviceUrl = options.url || "https://tv.youtube.com";
@@ -234,8 +241,25 @@ async function pollForCommands() {
       }
     }
 
-    // Handle mode changes from dashboard/app
-    if (data.mode && data.mode !== currentMode) {
+    // A Live Game takes priority over every configured mode. Game Day has a
+    // local BrowserView, so it cannot show the dashboard overlay until the
+    // Electron client temporarily returns to the tokenized TV Board.
+    configuredMode = data.mode || "regular";
+    const liveGameActive = await hasActiveLiveGame();
+    if (liveGameActive && currentMode !== "live-game") {
+      switchMode("live-game");
+    } else if (!liveGameActive && currentMode === "live-game") {
+      const options = {};
+      if (data.stream_url) options.streamUrl = data.stream_url;
+      if (data.sponsor_name) options.sponsorName = data.sponsor_name;
+      if (data.sponsor_logo) options.sponsorLogo = data.sponsor_logo;
+      if (data.overlay_text) options.overlayText = data.overlay_text;
+      switchMode(configuredMode, options);
+    }
+
+    // Honor mode changes only when no Live Game is deliberately holding the
+    // TV surface; otherwise the latest configured mode is restored afterward.
+    if (!liveGameActive && data.mode && data.mode !== currentMode) {
       console.log("[TV Box] Mode changed:", currentMode, "->", data.mode);
       const options = {};
       if (data.stream_url) options.streamUrl = data.stream_url;
@@ -251,6 +275,21 @@ async function pollForCommands() {
     }
   } catch (e) {
     console.error("[TV Box] Poll error:", e.message);
+  }
+}
+
+async function hasActiveLiveGame() {
+  if (!config.tvToken) return false;
+  try {
+    const res = await fetch(`${API_BASE}/api/tv-game?token=${encodeURIComponent(config.tvToken)}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data?.ok && data?.active?.display);
+  } catch (e) {
+    // A temporary game-feed error must not change the venue's configured mode
+    // or create a navigation loop on an unattended TV Box.
+    console.error("[TV Box] Failed to check Live Game state:", e.message);
+    return false;
   }
 }
 
