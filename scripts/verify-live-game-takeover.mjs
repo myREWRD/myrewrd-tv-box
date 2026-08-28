@@ -13,6 +13,8 @@ expect(/\/api\/tv-game\?token=\$\{encodeURIComponent\(config\.tvToken\)\}/, "TV 
 expect(/liveGameActive && currentMode !== "live-game"/, "Active games must take priority over every configured display mode.");
 expect(/!liveGameActive && currentMode === "live-game"/, "TV Box must return to the configured mode when the game ends.");
 expect(/!liveGameActive && data\.mode && data\.mode !== currentMode/, "Configured mode changes must not override an active game.");
+expect(/if \(compareVersions\(APP_VERSION, latestVersion\) >= 0\) return;/, "TV Box updater must accept a newer release and reject equal or older versions.");
+if (/if \(compareVersions\(APP_VERSION, latestVersion\) <= 0\) return;/.test(main)) failures.push("TV Box updater must not retain the reversed version gate.");
 
 if (packageJson.version !== "1.0.1") failures.push("TV Box incident fix must increment the updater version to 1.0.1.");
 
