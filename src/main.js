@@ -9,6 +9,37 @@ const https = require("https");
 const http = require("http");
 const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
+const { allowedNavigation } = require("./navigation");
+
+function navigate(contents, url) {
+  if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
+  contents.loadURL(url).catch(() => {});
+}
+
+function guardNavigation(contents) {
+  for (const eventName of ["will-navigate", "will-redirect"]) {
+    contents.on(eventName, (event, url) => {
+      const completingPairing = !config.paired && contents === mainWindow?.webContents
+        && contents.getURL() === `${API_BASE}/tv/pair`
+        && Boolean(tokenFromBoardUrl(url, API_BASE));
+      if (!completingPairing && !allowedNavigation(url, API_BASE, config.tvToken)) event.preventDefault();
+    });
+  }
+  contents.setWindowOpenHandler(({ url }) => {
+    if (!allowedNavigation(url, API_BASE, null) || new URL(url).origin === API_BASE) return { action: "deny" };
+    return {
+      action: "allow",
+      overrideBrowserWindowOptions: {
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, "provider-preload.js") },
+      },
+    };
+  });
+  contents.on("did-create-window", window => {
+    providerWindows.add(window);
+    guardNavigation(window.webContents);
+    window.on("closed", () => providerWindows.delete(window));
+  });
+}
 
 // ─── Config & State ─────────────────────────────────────────────────────────
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
@@ -25,10 +56,12 @@ let configuredMode = "regular";
 let sponsorData = null;
 let isUpdating = false; // Prevent multiple simultaneous updates
 let pollController = null;
+const providerWindows = new Set();
 const recovery = createRecovery({ restore: restoreBoard });
 
 function restoreBoard() {
   if (isUpdating) return;
+  for (const window of providerWindows) if (!window.isDestroyed()) window.close();
   // Discard responses begun before sleep; the server remains the mode authority.
   if (pollController) pollController.abort();
   if (!mainWindow || mainWindow.isDestroyed()) createMainWindow();
@@ -103,6 +136,7 @@ function createMainWindow() {
     },
   });
 
+  guardNavigation(mainWindow.webContents);
   // Next.js pairing uses client-side routing: did-navigate alone misses it.
   const rememberPairing = (_event, url, isMainFrame = true) => {
     if (!isMainFrame || config.paired) return;
@@ -184,7 +218,7 @@ function switchMode(mode, options = {}) {
     case "streaming-login":
       // Open a streaming service for the venue to log in
       const serviceUrl = options.url || "https://tv.youtube.com";
-      mainWindow.loadURL(serviceUrl).catch(() => {});
+      navigate(mainWindow.webContents, serviceUrl);
       break;
 
     default:
@@ -211,6 +245,7 @@ function startGameDayMode(options = {}) {
   });
 
   mainWindow.addBrowserView(streamView);
+  guardNavigation(streamView.webContents);
   streamView.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
     if (isMainFrame && code !== -3) recovery.schedule(15000);
   });
@@ -223,7 +258,7 @@ function startGameDayMode(options = {}) {
 
   // Load the stream URL or YouTube TV
   const streamUrl = options.streamUrl || "https://tv.youtube.com";
-  streamView.webContents.loadURL(streamUrl).catch(() => {});
+  navigate(streamView.webContents, streamUrl);
 
   // Fetch and display sponsor data
   fetchSponsorData();
@@ -464,7 +499,7 @@ function handleCommand(msg) {
 
     case "set_stream_url":
       if (currentMode === "gameday" && streamView) {
-        streamView.webContents.loadURL(msg.url);
+        navigate(streamView.webContents, msg.url);
       }
       break;
 
@@ -476,10 +511,10 @@ function handleCommand(msg) {
     case "navigate":
       // Navigate the stream view to a specific URL
       if (streamView && streamView.webContents) {
-        streamView.webContents.loadURL(msg.url);
+        navigate(streamView.webContents, msg.url);
       } else {
         // If no stream view exists, load URL in main window
-        mainWindow.loadURL(msg.url);
+        navigate(mainWindow.webContents, msg.url);
       }
       break;
 

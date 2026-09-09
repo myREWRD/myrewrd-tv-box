@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 const { tokenFromBoardUrl, createRecovery } = require('../src/recovery');
+const { allowedNavigation } = require('../src/navigation');
 const base = 'https://app.myrewrd.com';
 const token = 'tv_0123456789abcdef'; // synthetic fixture only
 const source = fs.readFileSync(path.join(__dirname, '../src/main.js'), 'utf8');
@@ -21,6 +22,8 @@ function boot(saved) {
       super(); this.options = options; this.urls = []; this.destroyed = false;
       this.webContents = Object.assign(new EventEmitter(), {
         mainFrame: { url: '' }, send() {}, reload() {},
+        setWindowOpenHandler: handler => { this.popupHandler = handler; },
+        getURL: () => this.webContents.mainFrame.url,
         destroy() {}, loadURL: (url) => this.loadURL(url),
       });
       windows.push(this);
@@ -46,6 +49,7 @@ function boot(saved) {
       };
       if (name === './recovery') return { tokenFromBoardUrl, createRecovery: opts => createRecovery({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
       if (name === './sponsor') return require('../src/sponsor');
+      if (name === './navigation') return require('../src/navigation');
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,
@@ -66,6 +70,12 @@ function boot(saved) {
 const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 
 (async () => {
+  for (const value of ['javascript:alert(1)', 'file:///C:/Windows/win.ini', 'http://youtube.com', 'https://youtube.com.evil.example', 'https://user:secret@youtube.com', `${base}/dashboard`, 'https://127.0.0.1']) {
+    assert.equal(allowedNavigation(value, base, token), false);
+  }
+  for (const value of [`${base}/tv/${token}`, `${base}/tv/pair`, 'https://tv.youtube.com/live', 'https://accounts.google.com/signin', 'https://www.hulu.com/live-tv']) {
+    assert.equal(allowedNavigation(value, base, token), true);
+  }
   const paired = boot({ paired: true, tvToken: token }); await settle();
   assert.equal(paired.windows[0].urls.at(-1), `${base}/tv/${token}`);
   paired.powerMonitor.emit('resume'); paired.powerMonitor.emit('unlock-screen');
@@ -73,6 +83,11 @@ const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(
   paired.fire(1000); await settle();
   assert.equal(paired.windows[0].urls.length, 2);
   assert.equal(paired.windows[0].kiosk, true);
+  assert.equal(paired.windows[0].popupHandler({ url: 'https://evil.example' }).action, 'deny');
+  const popup = paired.windows[0].popupHandler({ url: 'https://accounts.google.com/signin' });
+  assert.equal(popup.action, 'allow');
+  assert.ok(popup.overrideBrowserWindowOptions.webPreferences.preload.endsWith('provider-preload.js'));
+  assert.equal(popup.overrideBrowserWindowOptions.webPreferences.nodeIntegration, false);
   assert.equal([...paired.timers.values()].filter(t => t.interval && t.delay === 5000).length, 1);
 
   // Offline/failed top-level load retries the saved board; iframe errors do not.
@@ -92,6 +107,11 @@ const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(
   const fresh = boot(); await settle();
   const wc = fresh.windows[0].webContents;
   assert.equal(fresh.windows[0].urls[0], `${base}/tv/pair`);
+  let blocked = false;
+  wc.emit('will-navigate', { preventDefault() { blocked = true; } }, `${base}/tv/${token}`);
+  assert.equal(blocked, false, 'canonical full-page pairing must be allowed');
+  wc.emit('will-navigate', { preventDefault() { blocked = true; } }, `https://evil.example/tv/${token}`);
+  assert.equal(blocked, true, 'foreign full-page pairing must be blocked');
   for (const url of [`https://evil.example/tv/${token}`, `${base}.evil.example/tv/${token}`, `${base}/tv/${token}/extra`]) {
     wc.emit('did-navigate-in-page', {}, url, true);
     assert.equal(fresh.run('config.paired'), false);

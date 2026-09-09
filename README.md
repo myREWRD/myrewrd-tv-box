@@ -59,6 +59,8 @@ The board uses a server-validated venue TV token, not a dashboard/Supabase user 
 
 Before release, complete the physical acceptance checklist in SETUP_GUIDE.md. Source tests do not prove Windows firmware, managed policy, HDMI recovery, or actual public updater delivery. Version 1.0.4 is a candidate; the dashboard installer remains pinned to the verified 1.0.3 asset/hash until a reviewed release is approved and validated.
 
+The follow-up also restricts navigation/redirects to approved HTTPS TV/provider destinations. Authentication popups have a separate empty preload, never device IPC, and close on wake recovery. The dashboard companion secures operator commands using verified staff identity and venue permission. `scripts/electron-wake-integration.cjs` exercises real Electron events/session files in an isolated hidden window; its first pairing/storage phase passed locally, while subsequent relaunch/wake execution and physical acceptance remain pending. No production release or remote-support service enrollment has occurred.
+
 ## Builds
 
 ```bash
