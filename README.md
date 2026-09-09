@@ -34,6 +34,8 @@ The current client uses **HTTP polling**, not WebSockets. The dashboard/Vercel b
 
 ## Pairing
 
+The primary installation flow is Platform → TV Devices → Provision Device and its individualized setup BAT. See [SETUP_GUIDE.md](SETUP_GUIDE.md); PIN pairing below is the fallback.
+
 On an unconfigured device, the app generates a six-digit PIN and polls the dashboard pairing API. An authorized platform/venue operator enters that PIN in the provisioning interface. The backend issues the device’s venue configuration and TV token, which the box persists locally.
 
 Pairing PINs are temporary capabilities. Do not log or reuse them beyond the pairing flow, and do not copy a token/configuration between venues.
@@ -45,7 +47,19 @@ npm install
 npm start
 ```
 
-The repository currently has no committed lockfile and no automated test, lint, or type-check script. Adding a lockfile and tests should be a separate reviewed change.
+Run `node scripts/verify-wake-recovery.cjs`, `node scripts/verify-live-game-takeover.mjs`, and `node scripts/verify-gameday-sponsor-logo.mjs` for focused regression checks. There is no committed dependency lockfile; dependency reproducibility remains separate release debt.
+
+## Sleep, wake, and relaunch (1.0.4 candidate)
+
+Windows auto-login at boot does not disable password-on-wake, and idle sleep timeouts do not change the power button action. The updated dashboard setup sets AC/DC power and sleep buttons to Do Nothing and CONSOLELOCK to 0 for the dedicated local appliance. Existing boxes can use [scripts/Repair-TVBoxPower.ps1](scripts/Repair-TVBoxPower.ps1) locally as administrator under the dedicated `myrewrd` account. This script contains no device credential and does not reset passwords. It must not be applied to a personal or shared workstation. A held power button can still force hardware shutdown.
+
+The Electron client restores the saved tokenized TV Board on resume/unlock and relaunch, restores kiosk presentation, and rechecks server mode/Live Game priority. Failed top-level navigation, server 5xx, or renderer termination schedules a bounded retry (including the Game Day stream). Command polls have timeouts and reject responses begun before suspend. Pairing is captured for both full-page and Next.js in-page navigation, only at the canonical HTTPS origin. Unpair clears active views and prevents wake from restoring the former token.
+
+The board uses a server-validated venue TV token, not a dashboard/Supabase user session or refresh token. Invalid/revoked tokens remain invalid. No dashboard password is saved or automatically submitted. Existing AppData JSON and the default persistent Electron session are retained for installed-client and streaming compatibility; token-at-rest encryption is not introduced in this change. The device config IPC no longer returns the token, and pairing/command diagnostics do not print token-bearing URLs. Streaming providers can independently expire login sessions; the client cannot bypass provider authentication.
+
+Before release, complete the physical acceptance checklist in SETUP_GUIDE.md. Source tests do not prove Windows firmware, managed policy, HDMI recovery, or actual public updater delivery. Version 1.0.4 is a candidate; the dashboard installer remains pinned to the verified 1.0.3 asset/hash until a reviewed release is approved and validated.
+
+The follow-up also restricts navigation/redirects to approved HTTPS TV/provider destinations. Authentication popups have a separate empty preload, never device IPC, and close on wake recovery. The dashboard companion secures operator commands using verified staff identity and venue permission. Both phases of `scripts/electron-wake-integration.cjs` passed locally in real Electron 30.5.1 with hidden windows and isolated AppData: pairing, cold relaunch, cookie/local-storage persistence, wake/kiosk restoration, offline recovery, board and Game Day renderer crashes, and navigation/IPC rejection. Network responses and board/provider HTML are fixtures; power events are emitted, not physical sleep. Physical acceptance, real provider authentication, and previous-version updater delivery remain pending. No production release or remote-support service enrollment has occurred.
 
 ## Builds
 

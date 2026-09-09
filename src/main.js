@@ -1,13 +1,45 @@
 // myREWRD TV Box — Main Electron Process
 // Manages: pairing, mode switching, HTTP polling control, DRM streaming, sponsor overlay, auto-update
 
-const { app, BrowserWindow, BrowserView, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
 const https = require("https");
 const http = require("http");
 const { normalizeSponsorPayload } = require("./sponsor");
+const { tokenFromBoardUrl, createRecovery } = require("./recovery");
+const { allowedNavigation } = require("./navigation");
+
+function navigate(contents, url) {
+  if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
+  contents.loadURL(url).catch(() => {});
+}
+
+function guardNavigation(contents) {
+  for (const eventName of ["will-navigate", "will-redirect"]) {
+    contents.on(eventName, (event, url) => {
+      const completingPairing = !config.paired && contents === mainWindow?.webContents
+        && contents.getURL() === `${API_BASE}/tv/pair`
+        && Boolean(tokenFromBoardUrl(url, API_BASE));
+      if (!completingPairing && !allowedNavigation(url, API_BASE, config.tvToken)) event.preventDefault();
+    });
+  }
+  contents.setWindowOpenHandler(({ url }) => {
+    if (!allowedNavigation(url, API_BASE, null) || new URL(url).origin === API_BASE) return { action: "deny" };
+    return {
+      action: "allow",
+      overrideBrowserWindowOptions: {
+        webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, "provider-preload.js") },
+      },
+    };
+  });
+  contents.on("did-create-window", window => {
+    providerWindows.add(window);
+    guardNavigation(window.webContents);
+    window.on("closed", () => providerWindows.delete(window));
+  });
+}
 
 // ─── Config & State ─────────────────────────────────────────────────────────
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
@@ -23,6 +55,24 @@ let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
 let configuredMode = "regular";
 let sponsorData = null;
 let isUpdating = false; // Prevent multiple simultaneous updates
+let pollController = null;
+const providerWindows = new Set();
+const recovery = createRecovery({ restore: restoreBoard });
+
+function restoreBoard() {
+  if (isUpdating) return;
+  for (const window of providerWindows) if (!window.isDestroyed()) window.close();
+  // Discard responses begun before sleep; the server remains the mode authority.
+  if (pollController) pollController.abort();
+  if (!mainWindow || mainWindow.isDestroyed()) createMainWindow();
+  else switchMode("regular");
+  mainWindow.show();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.setKiosk(true);
+  mainWindow.setFullScreen(true);
+  mainWindow.focus();
+  startPolling();
+}
 
 function loadConfig() {
   // Check primary location (AppData)
@@ -31,7 +81,7 @@ function loadConfig() {
       return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
     }
   } catch (e) {
-    console.error("Failed to load config from AppData:", e);
+    console.error("Failed to load config from AppData");
   }
   // Check all possible locations where .bat setup script writes config.json
   const searchPaths = [
@@ -52,7 +102,7 @@ function loadConfig() {
         }
       }
     } catch (e) {
-      console.error("Failed to load config from", p, e);
+      console.error("Failed to load setup configuration");
     }
   }
   return { tvToken: null, venueId: null, venueName: null, paired: false };
@@ -60,6 +110,7 @@ function loadConfig() {
 
 function saveConfig(data) {
   config = { ...config, ...data };
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
@@ -85,11 +136,31 @@ function createMainWindow() {
     },
   });
 
+  guardNavigation(mainWindow.webContents);
+  // Next.js pairing uses client-side routing: did-navigate alone misses it.
+  const rememberPairing = (_event, url, isMainFrame = true) => {
+    if (!isMainFrame || config.paired) return;
+    const token = tokenFromBoardUrl(url, API_BASE);
+    if (!token) return;
+    saveConfig({ tvToken: token, paired: true });
+    console.log("[TV Box] Pairing saved.");
+    startPolling();
+  };
+  mainWindow.webContents.on("did-navigate", rememberPairing);
+  mainWindow.webContents.on("did-navigate-in-page", rememberPairing);
+  mainWindow.webContents.on("did-navigate", (_event, _url, responseCode) => {
+    if (responseCode >= 500) recovery.schedule(15000);
+  });
+  mainWindow.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
+    if (isMainFrame && code !== -3) recovery.schedule(15000);
+  });
+  mainWindow.webContents.on("render-process-gone", () => recovery.schedule(5000));
+
   // Start in pairing mode or regular TV board
   if (!config.paired || !config.tvToken) {
-    mainWindow.loadURL(`${API_BASE}/tv/pair`);
+    mainWindow.loadURL(`${API_BASE}/tv/pair`).catch(() => {});
   } else {
-    switchMode(currentMode);
+    switchMode("regular");
   }
 
   mainWindow.on("closed", () => {
@@ -99,8 +170,9 @@ function createMainWindow() {
 
 // ─── Mode Switching ─────────────────────────────────────────────────────────
 function switchMode(mode, options = {}) {
+  recovery.cancel();
   currentMode = mode;
-  console.log(`[TV Box] Switching to mode: ${mode}`, options);
+  console.log(`[TV Box] Switching display mode`);
 
   // Remove any existing stream view
   if (streamView) {
@@ -115,17 +187,21 @@ function switchMode(mode, options = {}) {
     overlayWindow = null;
   }
 
+  if (!config.paired || !config.tvToken) {
+    mainWindow.loadURL(`${API_BASE}/tv/pair`).catch(() => {});
+    return;
+  }
   switch (mode) {
     case "regular":
       // Load the standard TV board URL
       const tvUrl = `${API_BASE}/tv/${config.tvToken}`;
-      mainWindow.loadURL(tvUrl);
+      mainWindow.loadURL(tvUrl).catch(() => {});
       break;
 
     case "stream":
       // Load the TV board in stream mode (existing functionality)
       const streamTvUrl = `${API_BASE}/tv/${config.tvToken}`;
-      mainWindow.loadURL(streamTvUrl);
+      mainWindow.loadURL(streamTvUrl).catch(() => {});
       break;
 
     case "gameday":
@@ -136,17 +212,17 @@ function switchMode(mode, options = {}) {
     case "live-game":
       // The tokenized TV Board owns Live Games presentation. It replaces the
       // local Game Day BrowserView only while a venue game is actually active.
-      mainWindow.loadURL(`${API_BASE}/tv/${config.tvToken}`);
+      mainWindow.loadURL(`${API_BASE}/tv/${config.tvToken}`).catch(() => {});
       break;
 
     case "streaming-login":
       // Open a streaming service for the venue to log in
       const serviceUrl = options.url || "https://tv.youtube.com";
-      mainWindow.loadURL(serviceUrl);
+      navigate(mainWindow.webContents, serviceUrl);
       break;
 
     default:
-      mainWindow.loadURL(`${API_BASE}/tv/${config.tvToken}`);
+      mainWindow.loadURL(`${API_BASE}/tv/${config.tvToken}`).catch(() => {});
   }
 }
 
@@ -169,12 +245,20 @@ function startGameDayMode(options = {}) {
   });
 
   mainWindow.addBrowserView(streamView);
+  guardNavigation(streamView.webContents);
+  streamView.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
+    if (isMainFrame && code !== -3) recovery.schedule(15000);
+  });
+  streamView.webContents.on("render-process-gone", () => recovery.schedule(5000));
+  streamView.webContents.on("did-navigate", (_event, _url, responseCode) => {
+    if (responseCode >= 500) recovery.schedule(15000);
+  });
   streamView.setBounds({ x: 0, y: 0, width, height: streamHeight });
   streamView.setAutoResize({ width: true, height: false });
 
   // Load the stream URL or YouTube TV
   const streamUrl = options.streamUrl || "https://tv.youtube.com";
-  streamView.webContents.loadURL(streamUrl);
+  navigate(streamView.webContents, streamUrl);
 
   // Fetch and display sponsor data
   fetchSponsorData();
@@ -196,7 +280,7 @@ async function fetchSponsorData() {
       }
     }
   } catch (e) {
-    console.error("[TV Box] Failed to fetch sponsor:", e);
+    console.error("[TV Box] Sponsor feed unavailable.");
   }
 }
 
@@ -206,20 +290,27 @@ setInterval(fetchSponsorData, 5 * 60 * 1000);
 // ─── HTTP Polling (Dashboard Control) ────────────────────────────────────────
 let pollInterval = null;
 function startPolling() {
-  if (!config.tvToken) return;
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = null;
+  if (!config.paired || !config.tvToken) return;
   console.log("[TV Box] Starting HTTP polling for commands...");
   pollForCommands();
   pollInterval = setInterval(pollForCommands, 5000);
 }
 
 async function pollForCommands() {
-  if (!config.tvToken) return;
+  if (!config.paired || !config.tvToken || (pollController && !pollController.signal.aborted)) return;
+  const controller = new AbortController();
+  pollController = controller;
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const res = await fetch(
-      `${API_BASE}/api/tv-box-command?token=${encodeURIComponent(config.tvToken)}&version=${encodeURIComponent(APP_VERSION)}`
+      `${API_BASE}/api/tv-box-command?token=${encodeURIComponent(config.tvToken)}&version=${encodeURIComponent(APP_VERSION)}`,
+      { signal: controller.signal }
     );
     if (!res.ok) return;
     const data = await res.json();
+    if (controller.signal.aborted) return;
 
     // Handle pending command from venue app (e.g., navigate to Hulu)
     if (data.pending_command) {
@@ -231,7 +322,7 @@ async function pollForCommands() {
       } catch { cmd = null; }
 
       if (cmd && cmd.type) {
-        console.log("[TV Box] Received command:", cmd.type, cmd.url || "");
+        console.log("[TV Box] Received control command");
         handleCommand(cmd);
         // Acknowledge command (clear it from DB)
         fetch(`${API_BASE}/api/tv-box-command`, {
@@ -246,7 +337,8 @@ async function pollForCommands() {
     // local BrowserView, so it cannot show the dashboard overlay until the
     // Electron client temporarily returns to the tokenized TV Board.
     configuredMode = data.mode || "regular";
-    const liveGameActive = await hasActiveLiveGame();
+    const liveGameActive = await hasActiveLiveGame(controller.signal);
+    if (controller.signal.aborted) return;
     if (liveGameActive && currentMode !== "live-game") {
       switchMode("live-game");
     } else if (!liveGameActive && currentMode === "live-game") {
@@ -275,21 +367,24 @@ async function pollForCommands() {
       checkForUpdate(data.latest_version, data.update_url, data.force_update);
     }
   } catch (e) {
-    console.error("[TV Box] Poll error:", e.message);
+    console.error("[TV Box] Command poll unavailable; will retry.");
+  } finally {
+    clearTimeout(timeout);
+    if (pollController === controller) pollController = null;
   }
 }
 
-async function hasActiveLiveGame() {
+async function hasActiveLiveGame(signal) {
   if (!config.tvToken) return false;
   try {
-    const res = await fetch(`${API_BASE}/api/tv-game?token=${encodeURIComponent(config.tvToken)}`);
+    const res = await fetch(`${API_BASE}/api/tv-game?token=${encodeURIComponent(config.tvToken)}`, { signal });
     if (!res.ok) return false;
     const data = await res.json();
     return Boolean(data?.ok && data?.active?.display);
   } catch (e) {
     // A temporary game-feed error must not change the venue's configured mode
     // or create a navigation loop on an unattended TV Box.
-    console.error("[TV Box] Failed to check Live Game state:", e.message);
+    console.error("[TV Box] Live Game feed unavailable.");
     return false;
   }
 }
@@ -404,7 +499,7 @@ function handleCommand(msg) {
 
     case "set_stream_url":
       if (currentMode === "gameday" && streamView) {
-        streamView.webContents.loadURL(msg.url);
+        navigate(streamView.webContents, msg.url);
       }
       break;
 
@@ -416,10 +511,10 @@ function handleCommand(msg) {
     case "navigate":
       // Navigate the stream view to a specific URL
       if (streamView && streamView.webContents) {
-        streamView.webContents.loadURL(msg.url);
+        navigate(streamView.webContents, msg.url);
       } else {
         // If no stream view exists, load URL in main window
-        mainWindow.loadURL(msg.url);
+        navigate(mainWindow.webContents, msg.url);
       }
       break;
 
@@ -447,8 +542,11 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
+      if (pollController) pollController.abort();
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = null;
       saveConfig({ tvToken: null, venueId: null, venueName: null, paired: false });
-      mainWindow.loadURL(`${API_BASE}/tv/pair`);
+      switchMode("regular");
       break;
 
     case "ping":
@@ -461,40 +559,49 @@ function handleCommand(msg) {
 }
 
 // ─── IPC Handlers (from renderer pages) ─────────────────────────────────────
-ipcMain.handle("get-config", () => config);
+// A streaming provider must never be able to read the device token via preload.
+function trustedRenderer(event) {
+  return event.sender === mainWindow?.webContents
+    && event.senderFrame === mainWindow.webContents.mainFrame
+    && (event.senderFrame.url === `${API_BASE}/tv/pair`
+      || (Boolean(config.tvToken) && tokenFromBoardUrl(event.senderFrame.url, API_BASE) === config.tvToken));
+}
+ipcMain.handle("get-config", () => ({ paired: config.paired, venueName: config.venueName }));
 ipcMain.handle("get-mode", () => currentMode);
 ipcMain.handle("get-sponsor", () => sponsorData);
 
 ipcMain.on("pair-with-token", (event, token) => {
+  if (!trustedRenderer(event) || config.paired || !/^tv_[a-f0-9]+$/.test(token)) return;
   saveConfig({ tvToken: token, paired: true });
   startPolling();
   switchMode("regular");
 });
 
 ipcMain.on("switch-mode", (event, mode, options) => {
+  if (!trustedRenderer(event)) return;
   switchMode(mode, options);
 });
 
 // ─── App Lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createMainWindow();
-
-  // Watch for navigation from /tv/pair to /tv/[token] (pairing complete)
-  mainWindow.webContents.on("did-navigate", (event, url) => {
-    const tvMatch = url.match(/\/tv\/(tv_[a-f0-9]+)/);
-    if (tvMatch && tvMatch[1] && !config.paired) {
-      const token = tvMatch[1];
-      saveConfig({ tvToken: token, paired: true });
-      console.log("[TV Box] Paired via PIN! Token:", token);
-      startPolling();
-      fetchSponsorData();
-    }
+  powerMonitor.on("resume", () => recovery.schedule());
+  powerMonitor.on("unlock-screen", () => recovery.schedule());
+  powerMonitor.on("suspend", () => {
+    recovery.cancel();
+    if (pollController) pollController.abort();
   });
 
   if (config.paired && config.tvToken) {
     startPolling();
     fetchSponsorData();
   }
+});
+
+app.on("before-quit", () => {
+  recovery.stop();
+  if (pollController) pollController.abort();
+  if (pollInterval) clearInterval(pollInterval);
 });
 
 app.on("window-all-closed", () => {

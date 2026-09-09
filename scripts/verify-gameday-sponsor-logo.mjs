@@ -44,6 +44,7 @@ assert.match(overlay, /renderVersion !== sponsorRenderVersion/);
 assert.match(overlay, /loadSponsorLogo\(logo, logoUrls, renderVersion, index \+ 1\)/);
 assert.match(overlay, /logo\.src = logoUrls\[index\]/);
 assert.doesNotMatch(overlay, /logo\.src\s*=\s*sponsor\.logoUrlMedium \|\| sponsor\.logoUrl/);
-assert.equal(packageJson.version, "1.0.3", "Game Day sponsor-logo release must be updater-deliverable as 1.0.3");
+const [major, minor, patch] = packageJson.version.split('.').map(Number);
+assert.ok(major > 1 || (major === 1 && (minor > 0 || (minor === 0 && patch >= 3))), "Sponsor-logo fix must retain version 1.0.3 or newer");
 
 console.log("Game Day sponsor logo normalization contract passed.");
