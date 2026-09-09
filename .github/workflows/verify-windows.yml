@@ -33,6 +33,8 @@ jobs:
         run: node scripts/verify-packaged-upgrade.cjs "${{ runner.temp }}/tv-fixtures" --gameday
       - name: Portable rollback after board failure
         run: node scripts/verify-packaged-upgrade.cjs "${{ runner.temp }}/tv-fixtures" --fail-candidate
+      - name: Portable recovery after supervisor termination
+        run: node scripts/verify-packaged-upgrade.cjs "${{ runner.temp }}/tv-fixtures" --kill-supervisor
       - name: Build unpublished production candidate
         run: npm run build:win-portable -- --publish never
       - name: Build released legacy updater fixture

@@ -103,7 +103,7 @@ async function prepareUpdate({ version, url, sha256, installRoot, profile, start
   child.unref();
   const deadline = Date.now() + 60000;
   while (!failed && Date.now() < deadline) {
-    if (hasMark(job, 'supervisor.ready.json', 'supervisor-ready')) return job;
+    if (hasMark(job, 'supervisor.ready.json', 'supervisor-ready')) return { ...job, supervisorPid: child.pid };
     await wait(100);
   }
   mark(job, 'abort.json', 'abort');

@@ -25,7 +25,7 @@ async function run() {
   assert.throws(() => validateArtifact(valid, '0'.repeat(64)), /checksum mismatch/);
   const invalid = path.join(root, 'invalid.exe'); fs.writeFileSync(invalid, Buffer.alloc(padded.length));
   assert.throws(() => validateArtifact(invalid, sha256), /Invalid update/);
-  const cases = process.argv.slice(2).length ? process.argv.slice(2) : ['success', 'exit', 'no-ready', 'no-active', 'diagnostics-failure'];
+  const cases = process.argv.slice(2).length ? process.argv.slice(2) : ['success', 'exit', 'no-ready', 'no-active', 'diagnostics-failure', 'supervisor-exit'];
   for (const mode of cases) {
     const installRoot = path.join(root, mode); fs.mkdirSync(installRoot);
     const previousExe = path.join(installRoot, 'previous.exe'); fs.copyFileSync(fixture, previousExe);
@@ -34,7 +34,7 @@ async function run() {
     fs.mkdirSync(path.dirname(startupPath), { recursive: true });
     const original = Buffer.from('@echo off\r\nrem previous startup bytes\r\n'); fs.writeFileSync(startupPath, original);
     fs.writeFileSync(path.join(profile, 'config.json'), '{"synthetic":"pairing-preserved"}');
-    fs.writeFileSync(path.join(installRoot, 'fixture-mode.txt'), mode === 'diagnostics-failure' ? 'exit' : mode);
+    fs.writeFileSync(path.join(installRoot, 'fixture-mode.txt'), mode === 'diagnostics-failure' ? 'exit' : mode === 'supervisor-exit' ? 'no-ready' : mode);
     const parent = spawn(previousExe, ['--original'], { cwd: installRoot, windowsHide: true, stdio: 'ignore' });
     parent.on('error', error => { throw error; });
     await until(() => fs.existsSync(path.join(installRoot, 'original.json')), 'original process', 10000);
@@ -54,6 +54,10 @@ async function run() {
       fs.mkdirSync(path.join(installRoot, 'update-failure.json'));
     }
     fs.writeFileSync(path.join(installRoot, 'shutdown'), 'exit');
+    if (mode === 'supervisor-exit') {
+      await until(() => fs.existsSync(path.join(job.directory, 'candidate.started')), 'candidate started before killing its supervisor');
+      process.kill(job.supervisorPid);
+    }
     await until(() => fs.existsSync(path.join(job.directory, 'result.json')), `supervisor ${mode}`);
     const result = JSON.parse(fs.readFileSync(path.join(job.directory, 'result.json')));
     if (mode === 'success') {
@@ -61,7 +65,7 @@ async function run() {
       await until(() => fs.existsSync(path.join(installRoot, 'success.marker')), 'activation');
       assert.ok(fs.readFileSync(startupPath, 'utf8').includes('myREWRD.TV.Box.1.0.5.exe'));
     } else {
-      assert.equal(result.phase, 'rollback-started');
+      assert.equal(result.phase, mode === 'supervisor-exit' ? 'watchdog-rollback-started' : 'rollback-started');
       await until(() => fs.existsSync(path.join(installRoot, 'rollback.marker')), 'rollback');
       assert.deepEqual(fs.readFileSync(startupPath), original, 'Exact startup restored');
       assert.equal(blockedVersion(installRoot, '1.0.5'), true);

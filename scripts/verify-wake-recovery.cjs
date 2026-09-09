@@ -16,6 +16,7 @@ function boot(saved) {
   const app = Object.assign(new EventEmitter(), {
     getPath: () => '/fixture', getVersion: () => '1.0.4',
     commandLine: { appendSwitch() {} }, whenReady: () => Promise.resolve(), quit() {},
+    requestSingleInstanceLock: () => true, exit() {},
   });
   class Window extends EventEmitter {
     constructor(options) {

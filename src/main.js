@@ -9,6 +9,11 @@ const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
 const { allowedNavigation } = require("./navigation");
 
+// Recovery may race a completed restart if its result could not be written.
+// Only one process may own this device profile and visible board.
+if (!app.requestSingleInstanceLock()) app.exit(0);
+app.on("second-instance", () => { if (mainWindow) restoreBoard(); });
+
 function navigate(contents, url) {
   if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
   contents.loadURL(url).catch(() => {});
@@ -561,7 +566,7 @@ app.on("activate", () => {
 });
 
 // ─── Auto-restart on crash ──────────────────────────────────────────────────
-process.on("uncaughtException", (err) => {
-  console.error("[TV Box] Uncaught exception:", err);
+process.on("uncaughtException", () => {
+  console.error("[TV Box] Unexpected application error");
   // Don't crash — just log and continue
 });

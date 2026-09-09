@@ -41,7 +41,7 @@ app.whenReady().then(async () => {
           if (version === (settings.originalVersion || '1.0.5')) await win.webContents.executeJavaScript("localStorage.setItem('test-persistence','preserved')");
           const value = await win.webContents.executeJavaScript("localStorage.getItem('test-persistence')");
           const cookies = await session.defaultSession.cookies.get({ url: 'https://tv.youtube.com', name: 'test-session' });
-          record('board', { localStorage: value, cookie: cookies[0]?.value });
+          record('board', { at: Date.now(), localStorage: value, cookie: cookies[0]?.value });
           session.defaultSession.flushStorageData();
         } catch {}
       });

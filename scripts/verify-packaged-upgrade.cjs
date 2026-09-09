@@ -5,7 +5,8 @@ const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const fixtureRoot = path.resolve(process.argv[2]);
-const failCandidate = process.argv.includes('--fail-candidate');
+const killSupervisor = process.argv.includes('--kill-supervisor');
+const failCandidate = process.argv.includes('--fail-candidate') || killSupervisor;
 const legacy = process.argv.includes('--legacy');
 const originalVersion = legacy ? '1.0.4' : '1.0.5';
 if (legacy && failCandidate) throw Error('Legacy has no rollback supervisor; do not claim recovery');
@@ -51,13 +52,26 @@ server.listen(0, '127.0.0.1', async () => {
     }
     await until(() => fs.existsSync(path.join(root, '.updates')), 'transaction staged');
     let job;
+    if (killSupervisor) {
+      await until(() => read(path.join(root, '1.0.6.started.json')), 'candidate process before supervisor termination');
+      const jobs = fs.readdirSync(path.join(root, '.updates'));
+      assert.equal(jobs.length, 1);
+      const identity = read(path.join(root, '.updates', jobs[0], 'supervisor.ready.json'));
+      assert.ok(identity?.pid > 0 && identity.phase === 'supervisor-ready');
+      process.kill(identity.pid);
+    }
     await until(() => { job = fs.readdirSync(path.join(root, '.updates')).map(n => path.join(root, '.updates', n)).find(n => read(path.join(n, 'result.json'))); return job; }, 'supervisor result');
     const result = read(path.join(job, 'result.json'));
-    assert.equal(result.phase, failCandidate ? 'rollback-started' : 'complete');
+    assert.equal(result.phase, killSupervisor ? 'watchdog-rollback-started' : failCandidate ? 'rollback-started' : 'complete');
     if (failCandidate) {
       const failedAt = fs.statSync(path.join(job, 'abort.json')).mtimeMs;
       await until(() => read(path.join(root, '1.0.5.heartbeat.json'))?.at > failedAt, 'previous packaged app restarted');
+      await until(() => read(path.join(root, '1.0.5.board.json'))?.at > failedAt, 'previous paired board displayed after rollback');
+      assert.equal(read(path.join(root, '1.0.5.board.json')).cookie, 'preserved');
+      assert.equal(read(path.join(root, '1.0.5.board.json')).localStorage, 'preserved');
       assert.equal(fs.readFileSync(startupPath, 'utf8'), prior);
+      await wait(12000);
+      assert.equal(fs.readdirSync(path.join(root, '.updates')).length, 1, 'failed version not retried across further polls');
     } else {
       await until(() => read(path.join(root, '1.0.6.board.json'))?.cookie === 'preserved', 'replacement board and cookie');
       assert.equal(read(path.join(root, '1.0.6.board.json')).localStorage, 'preserved');

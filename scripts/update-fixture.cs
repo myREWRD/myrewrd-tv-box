@@ -21,6 +21,7 @@ class UpdateFixture {
     var manifest=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(manifestPath));
     string nonce=(string)manifest["nonce"],version=(string)manifest["version"];
     string mode=File.ReadAllText(Path.Combine(root,"fixture-mode.txt"));
+    File.WriteAllText(Path.Combine(job,"candidate.started"),"started");
     if(mode=="exit") return;
     if(mode=="no-ready") { Thread.Sleep(150000); return; }
     File.WriteAllText(Path.Combine(job,"candidate.ready.json"),json.Serialize(new {nonce=nonce,version=version,phase="board-ready"}));
