@@ -50,6 +50,7 @@ function boot(saved) {
       if (name === './recovery') return { tokenFromBoardUrl, createRecovery: opts => createRecovery({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
       if (name === './sponsor') return require('../src/sponsor');
       if (name === './navigation') return require('../src/navigation');
+      if (name === './update') return require('../src/update');
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,
