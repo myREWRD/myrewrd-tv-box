@@ -4,12 +4,15 @@
 const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { execFile } = require("child_process");
-const https = require("https");
-const http = require("http");
+const { prepareUpdate, createCandidate, blockedVersion } = require("./update");
 const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
 const { allowedNavigation } = require("./navigation");
+
+// Recovery may race a completed restart if its result could not be written.
+// Only one process may own this device profile and visible board.
+if (!app.requestSingleInstanceLock()) app.exit(0);
+app.on("second-instance", () => { if (mainWindow) restoreBoard(); });
 
 function navigate(contents, url) {
   if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
@@ -45,7 +48,7 @@ function guardNavigation(contents) {
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
 const API_BASE = "https://app.myrewrd.com";
 const APP_VERSION = app.getVersion(); // reads from package.json "version"
-const INSTALL_DIR = "C:\\Users\\myrewrd\\myREWRD-TV-Box";
+const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || "C:\\Users\\myrewrd\\myREWRD-TV-Box";
 
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
@@ -55,12 +58,18 @@ let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
 let configuredMode = "regular";
 let sponsorData = null;
 let isUpdating = false; // Prevent multiple simultaneous updates
+let retryUpdateAfter = 0;
+let handoffRequested = false;
 let pollController = null;
 const providerWindows = new Set();
 const recovery = createRecovery({ restore: restoreBoard });
+const updateCandidate = createCandidate({
+  argv: process.argv || [], installRoot: INSTALL_DIR, profile: app.getPath("userData"), version: APP_VERSION, app,
+  activate() { mainWindow.show(); mainWindow.focus(); startPolling(); fetchSponsorData(); },
+});
 
 function restoreBoard() {
-  if (isUpdating) return;
+  if (handoffRequested || (updateCandidate && !updateCandidate.active)) return;
   for (const window of providerWindows) if (!window.isDestroyed()) window.close();
   // Discard responses begun before sleep; the server remains the mode authority.
   if (pollController) pollController.abort();
@@ -85,6 +94,7 @@ function loadConfig() {
   }
   // Check all possible locations where .bat setup script writes config.json
   const searchPaths = [
+    path.join(INSTALL_DIR, "config.json"),
     path.join(path.dirname(process.execPath), "config.json"),
     "C:\\Users\\myrewrd\\myREWRD-TV-Box\\config.json",
     path.join(process.env.USERPROFILE || "", "myREWRD-TV-Box", "config.json"),
@@ -124,6 +134,7 @@ function createMainWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
   mainWindow = new BrowserWindow({
+    show: !updateCandidate,
     width,
     height,
     fullscreen: true,
@@ -137,6 +148,15 @@ function createMainWindow() {
   });
 
   guardNavigation(mainWindow.webContents);
+  let boardNavigationSucceeded = false;
+  mainWindow.webContents.on("did-navigate", (_event, url, responseCode) => {
+    boardNavigationSucceeded = responseCode >= 200 && responseCode < 400
+      && Boolean(config.paired && config.tvToken) && tokenFromBoardUrl(url, API_BASE) === config.tvToken;
+  });
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (updateCandidate && boardNavigationSucceeded
+        && tokenFromBoardUrl(mainWindow.webContents.getURL(), API_BASE) === config.tvToken) updateCandidate.boardReady();
+  });
   // Next.js pairing uses client-side routing: did-navigate alone misses it.
   const rememberPairing = (_event, url, isMainFrame = true) => {
     if (!isMainFrame || config.paired) return;
@@ -170,6 +190,7 @@ function createMainWindow() {
 
 // ─── Mode Switching ─────────────────────────────────────────────────────────
 function switchMode(mode, options = {}) {
+  if (updateCandidate && !updateCandidate.active && mode !== "regular") return;
   recovery.cancel();
   currentMode = mode;
   console.log(`[TV Box] Switching display mode`);
@@ -290,6 +311,7 @@ setInterval(fetchSponsorData, 5 * 60 * 1000);
 // ─── HTTP Polling (Dashboard Control) ────────────────────────────────────────
 let pollInterval = null;
 function startPolling() {
+  if (updateCandidate && !updateCandidate.active) return;
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = null;
   if (!config.paired || !config.tvToken) return;
@@ -364,7 +386,7 @@ async function pollForCommands() {
 
     // Check for updates
     if (data.latest_version && data.update_url) {
-      checkForUpdate(data.latest_version, data.update_url, data.force_update);
+      checkForUpdate(data.latest_version, data.update_url, data.update_sha256);
     }
   } catch (e) {
     console.error("[TV Box] Command poll unavailable; will retry.");
@@ -400,92 +422,23 @@ function compareVersions(current, latest) {
   return 0; // same
 }
 
-async function checkForUpdate(latestVersion, downloadUrl, forceUpdate) {
-  if (isUpdating) return;
-  // compareVersions returns 1 only when latestVersion is strictly newer.
-  if (compareVersions(APP_VERSION, latestVersion) <= 0) return; // already up to date or newer
-
-  console.log(`[TV Box] Update available: ${APP_VERSION} -> ${latestVersion}`);
+async function checkForUpdate(latestVersion, downloadUrl, sha256) {
+  if (isUpdating || Date.now() < retryUpdateAfter) return;
+  if (compareVersions(APP_VERSION, latestVersion) <= 0) return;
+  if (!/^[a-f0-9]{64}$/i.test(sha256 || "") || blockedVersion(INSTALL_DIR, latestVersion)) return;
   isUpdating = true;
-
   try {
-    const newExeName = `myREWRD.TV.Box.${latestVersion}.exe`;
-    const downloadPath = path.join(INSTALL_DIR, newExeName + ".downloading");
-    const finalPath = path.join(INSTALL_DIR, newExeName);
-
-    // Download the new exe
-    console.log("[TV Box] Downloading update from:", downloadUrl);
-    await downloadFile(downloadUrl, downloadPath);
-
-    // Verify download (must be > 10MB to be valid)
-    const stats = fs.statSync(downloadPath);
-    if (stats.size < 10 * 1024 * 1024) {
-      console.error("[TV Box] Downloaded file too small, aborting update");
-      fs.unlinkSync(downloadPath);
-      isUpdating = false;
-      return;
-    }
-
-    // Rename download to final name
-    if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
-    fs.renameSync(downloadPath, finalPath);
-    console.log("[TV Box] Update downloaded successfully:", finalPath);
-
-    // Update the startup shortcut to point to new exe
-    const startupDir = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup");
-    const batPath = path.join(startupDir, "myREWRD-TV-Box.bat");
-    fs.writeFileSync(batPath, `@echo off\r\nstart "" "${finalPath}"\r\n`);
-
-    // Remove old exe (current running one will be removed after restart)
-    const currentExe = process.execPath;
-    const oldExeName = path.basename(currentExe);
-    if (oldExeName !== newExeName) {
-      // Schedule deletion of old exe after restart
-      const cleanupBat = path.join(INSTALL_DIR, "cleanup.bat");
-      fs.writeFileSync(cleanupBat,
-        `@echo off\r\nping 127.0.0.1 -n 3 >nul\r\ndel "${currentExe}" 2>nul\r\ndel "%~f0"\r\n`
-      );
-    }
-
-    console.log("[TV Box] Restarting with new version...");
-    // Launch new exe and quit current
-    execFile(finalPath, { detached: true, stdio: "ignore" });
+    const previousExe = process.env.PORTABLE_EXECUTABLE_FILE;
+    const startupPath = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "myREWRD-TV-Box.bat");
+    await prepareUpdate({ version: latestVersion, url: downloadUrl, sha256, installRoot: INSTALL_DIR,
+      profile: app.getPath("userData"), startupPath, previousExe });
+    handoffRequested = true;
     app.quit();
-
-  } catch (e) {
-    console.error("[TV Box] Update failed:", e.message);
+  } catch {
+    console.error("[TV Box] Update could not start safely; keeping the current board.");
+    retryUpdateAfter = Date.now() + 5 * 60 * 1000;
     isUpdating = false;
   }
-}
-
-function downloadFile(url, destPath) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destPath);
-    const request = (url.startsWith("https") ? https : http).get(url, (response) => {
-      // Handle redirects (GitHub releases redirect)
-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        file.close();
-        fs.unlinkSync(destPath);
-        return downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
-      }
-      if (response.statusCode !== 200) {
-        file.close();
-        fs.unlinkSync(destPath);
-        return reject(new Error(`HTTP ${response.statusCode}`));
-      }
-      response.pipe(file);
-      file.on("finish", () => { file.close(); resolve(); });
-    });
-    request.on("error", (err) => {
-      file.close();
-      if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-      reject(err);
-    });
-    request.setTimeout(300000, () => { // 5 min timeout
-      request.destroy();
-      reject(new Error("Download timeout"));
-    });
-  });
 }
 
 // ─── Command Handler (from Dashboard/App) ───────────────────────────────────
@@ -613,7 +566,7 @@ app.on("activate", () => {
 });
 
 // ─── Auto-restart on crash ──────────────────────────────────────────────────
-process.on("uncaughtException", (err) => {
-  console.error("[TV Box] Uncaught exception:", err);
+process.on("uncaughtException", () => {
+  console.error("[TV Box] Unexpected application error");
   // Don't crash — just log and continue
 });

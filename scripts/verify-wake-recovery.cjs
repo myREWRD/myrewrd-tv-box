@@ -16,6 +16,7 @@ function boot(saved) {
   const app = Object.assign(new EventEmitter(), {
     getPath: () => '/fixture', getVersion: () => '1.0.4',
     commandLine: { appendSwitch() {} }, whenReady: () => Promise.resolve(), quit() {},
+    requestSingleInstanceLock: () => true, exit() {},
   });
   class Window extends EventEmitter {
     constructor(options) {
@@ -50,6 +51,7 @@ function boot(saved) {
       if (name === './recovery') return { tokenFromBoardUrl, createRecovery: opts => createRecovery({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
       if (name === './sponsor') return require('../src/sponsor');
       if (name === './navigation') return require('../src/navigation');
+      if (name === './update') return require('../src/update');
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,

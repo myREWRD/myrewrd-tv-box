@@ -15,7 +15,18 @@ The existing provisioning workflow uses a dedicated passwordless local account a
 
 Use `scripts/Repair-TVBoxPower.ps1` from this repository on the dedicated appliance, as administrator under the local `myrewrd` account. It configures both AC and battery power/sleep buttons to Do Nothing and disables the active plan's password-on-resume setting. It does not alter device pairing, passwords, autologon, or the installed executable. Do not run it on a personal/shared PC. Existing firmware/organization policies may override Windows settings: failed commands or a remaining wake sign-in screen mean the box must not be shipped until the responsible Windows policy is resolved.
 
-The repair addresses the Windows sign-in screen even on 1.0.3. App recovery improvements require the separately approved 1.0.4 release. Re-running old setup alone cannot add them. Never overwrite a verified download hash with an unverified candidate hash.
+The power repair addresses the Windows sign-in screen even on 1.0.3. Version 1.0.4 contains app wake/pairing recovery, but its updater has a confirmed Windows process-lifetime bug. Re-running old setup alone cannot add the corrected updater. Never overwrite a verified download hash with an unverified candidate hash.
+
+## One-time attended updater repair
+
+This is an acceptance procedure for an approved repair artifact, not authorization to install the current unpublished candidate. Legacy versions through 1.0.4 must not receive another automatic update through their broken updater. The companion API blocks those offers. Do the first repair on the owner's myREWRD test box before scheduling any venue repair; do not use the experimental self-detaching bootstrap for an unattended fleet rollout.
+
+1. Keep the existing AppData/profile and Startup BAT. Copy the approved, checksum-verified Windows repair executable into the existing `C:\Users\myrewrd\myREWRD-TV-Box` folder under its new versioned filename, retaining the old executable. Do not rerun provisioning, unpair, clear storage, or copy another device's configuration.
+2. On the dedicated local `myrewrd` account, close the current TV app normally with Alt+F4. Launch the new executable locally, outside the old updater. Confirm the correct paired board appears without a login. If it does not, close the candidate and relaunch the retained old executable; leave Startup unchanged.
+3. Only after that confirmation, back up the existing `myREWRD-TV-Box.bat` in the current user's Startup folder and change its executable path to the new versioned file. Keep its `@echo off` / `start "" "<full executable path>"` structure. Do not put tokens or credentials into the BAT.
+4. Run `scripts/Repair-TVBoxPower.ps1` as administrator on that dedicated local appliance account. This independently addresses Windows' sign-in-on-wake policy; an Electron update cannot unlock Windows.
+5. Reboot, verify the new version's heartbeat and visible paired board, then complete every physical sleep/power/offline acceptance check below. Failure means restore the previous Startup path and executable, retain the profile, and keep rollout paused.
+6. Subsequent approved updates from 1.0.5 or later can use the supervised update path with a reviewed release checksum. Verify a real successful update and a controlled failed replacement on the test box before fleet use. Never infer display health solely from a stored Online status.
 
 ## Acceptance before delivery
 
