@@ -1,172 +1,42 @@
-# myREWRD TV Box — Setup Guide
+# myREWRD TV Box setup and wake recovery
 
-**Hardware:** GMKtec G3S Mini PC (Intel N95, 8GB RAM, 256GB SSD)
+Hardware target: GMKtec G3S Windows mini PC. This supersedes the old manual Chrome startup instructions; the supported client is the Electron appliance.
 
----
+## Install once
 
-## What's in the Box
+1. Connect power, HDMI, temporary keyboard/mouse, and setup Wi-Fi. Complete Windows setup with a dedicated local `myrewrd` appliance account, not a personal Microsoft account.
+2. In the dashboard, use Platform → TV Devices → Provision Device. Select the venue/device and optionally destination Wi-Fi, then download the individualized setup BAT. Treat this file as a credential because it contains the issued TV token.
+3. On the appliance, run that BAT as administrator from the local `myrewrd` account. It verifies the public executable, saves pairing, creates startup, and restarts. Successful setup deletes its credential-bearing BAT; securely remove any transferred copies too.
+4. Confirm the board opens and Platform → TV Devices reports Online. Complete the checklist below before removing keyboard/mouse.
 
-- GMKtec G3S Mini PC
-- Power adapter
-- HDMI cable
-- VESA mount bracket + screws
-- User manual (ignore it)
+The existing provisioning workflow uses a dedicated passwordless local account and boot auto-login. It is not a Windows security boundary and must not contain personal/admin dashboard sessions. This change does not add stored Windows passwords or auto-submit web credentials. Conversion to a least-privilege managed kiosk is separate work.
 
-## What You'll Also Need
+## Repair an already-installed box
 
-- A TV with an available HDMI port
-- WiFi network name + password for the venue (or your home for testing)
-- A USB mouse (just for initial setup — remove after)
-- A USB keyboard (just for initial setup — remove after)
+Use `scripts/Repair-TVBoxPower.ps1` from this repository on the dedicated appliance, as administrator under the local `myrewrd` account. It configures both AC and battery power/sleep buttons to Do Nothing and disables the active plan's password-on-resume setting. It does not alter device pairing, passwords, autologon, or the installed executable. Do not run it on a personal/shared PC. Existing firmware/organization policies may override Windows settings: failed commands or a remaining wake sign-in screen mean the box must not be shipped until the responsible Windows policy is resolved.
 
----
+The repair addresses the Windows sign-in screen even on 1.0.3. App recovery improvements require the separately approved 1.0.4 release. Re-running old setup alone cannot add them. Never overwrite a verified download hash with an unverified candidate hash.
 
-## STEP 1: Unbox & Connect (2 minutes)
+## Acceptance before delivery
 
-1. Take the mini PC out of the box
-2. Plug the **HDMI cable** into the mini PC and into your TV
-3. Plug the **power adapter** into the mini PC and into a wall outlet
-4. Plug in a **USB mouse** and **USB keyboard** (temporarily)
-5. Turn on the TV and switch to the correct HDMI input
-6. Press the **power button** on the mini PC (red button on front)
-7. Wait ~30 seconds — Windows will boot up
+- Restart and cold power-cycle: without touching sign-in, the correct venue board opens full-screen and the device becomes Online.
+- Briefly press the physical power button while running: the board remains visible. A held button can still force shutdown; BIOS power-loss recovery is hardware-specific.
+- Deliberately select Windows Sleep, then wake: no Windows Sign in click/password/PIN, no myREWRD login, correct board/mode, and Online heartbeat. Test several cycles and one longer sleep.
+- Wake with Wi-Fi unavailable, then restore Wi-Fi: the board retries automatically without new pairing. Repeat while the initial board load fails.
+- Check Regular, Stream, Game Day, and Live Game takeover/return. Existing provider cookies should survive relaunch; provider-mandated login expiry remains outside myREWRD control.
+- Complete fallback PIN pairing and restart: the pairing remains saved. Verify unpair/revocation does not regain access on wake.
+- On an isolated test device, verify renderer recovery and the previous-version updater path using the actual public approved artifact. Confirm version and pairing after restart.
 
----
+Record Windows edition/build, hardware/BIOS, installed app version, date, and results without tokens, Wi-Fi passwords, or screenshots of credentials. Automated mocked lifecycle tests supplement but do not replace this checklist.
 
-## STEP 2: Windows First-Time Setup (5 minutes)
+## Troubleshooting and recovery
 
-Windows 11 will walk you through initial setup:
+| Symptom | Action |
+|---|---|
+| Windows Sign in after wake | Apply the dedicated power repair and inspect overriding local/domain power policies. Electron cannot unlock Windows. |
+| Pairing appears after relaunch | Verify the same Windows profile/AppData is in use; install the pairing-persistence fix. Never copy another venue's config. |
+| Invalid token screen | An authorized operator must inspect/re-pair the device; do not bypass token validation. |
+| Board blank while offline | Restore networking and allow the bounded retry; verify server availability. |
+| Streaming provider login | Use authorized provider login; no password automation is supplied. |
 
-1. **Region:** United States → Next
-2. **Keyboard:** US → Next, skip second keyboard
-3. **Network:** Connect to your WiFi network (enter password)
-4. **Name this PC:** Type `MYREWRD-TV-001` (or whatever number) → Next
-5. **How would you like to set up?** → Choose "Set up for personal use"
-6. **Microsoft Account:** Click "Sign-in options" → "Offline account" → "Limited experience"
-7. **Username:** Type `myrewrd` → Next
-8. **Password:** Leave BLANK (no password) → Next → Next → Next
-9. **Privacy settings:** Turn everything OFF → Accept
-10. Wait for Windows to finish setting up (2-3 minutes)
-
-You'll land on the Windows desktop.
-
----
-
-## STEP 3: Install Chrome (3 minutes)
-
-1. Open **Microsoft Edge** (blue icon on taskbar)
-2. Go to: `google.com/chrome`
-3. Click **Download Chrome** → Run the installer
-4. Wait for Chrome to install and open
-5. When Chrome asks to be default browser → Click **Yes**
-6. Close Edge — you won't need it again
-
----
-
-## STEP 4: Set Up the TV Board (2 minutes)
-
-1. In Chrome, go to: `https://app.myrewrd.com/tv/PASTE_TV_TOKEN_HERE`
-   
-   **To get the TV token:**
-   - Log into https://app.myrewrd.com
-   - Go to the venue's TV Board settings
-   - Copy the TV Board URL (looks like: `https://app.myrewrd.com/tv/tv_abc123...`)
-   - Paste that full URL into Chrome on the mini PC
-
-2. You should see the TV Board loading with the venue's lineup
-3. Press **F11** to go full-screen (hides the browser toolbar)
-
----
-
-## STEP 5: Make It Auto-Start (3 minutes)
-
-This makes the TV Board open automatically every time the mini PC turns on — no mouse/keyboard needed.
-
-1. Press **Windows key + R** (opens Run dialog)
-2. Type: `shell:startup` → press Enter
-3. A folder opens. Right-click in the empty space → **New** → **Shortcut**
-4. For the location, paste this (replace YOUR_TV_TOKEN with the actual token):
-   ```
-   "C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --start-fullscreen https://app.myrewrd.com/tv/YOUR_TV_TOKEN
-   ```
-5. Click Next → Name it `myREWRD TV` → Click Finish
-6. Close the folder
-
----
-
-## STEP 6: Disable Sleep & Screen Lock (2 minutes)
-
-The mini PC must never sleep or lock the screen.
-
-1. Right-click the desktop → **Display settings**
-2. Scroll down → Click **Screen and sleep** (or search "Power" in Settings)
-3. Set ALL options to **Never**:
-   - Screen: Never turn off
-   - Sleep: Never
-4. Go to **Settings** → **Accounts** → **Sign-in options**
-5. Under "Require sign-in" → set to **Never**
-
----
-
-## STEP 7: Test It (1 minute)
-
-1. Restart the mini PC (Start → Power → Restart)
-2. Wait ~45 seconds
-3. The TV Board should automatically open full-screen in Chrome
-4. Verify you see the venue's artist lineup or "Game Day" mode
-
-**If it works:** Remove the USB mouse and keyboard. You're done.
-
----
-
-## STEP 8: Mount Behind the TV (Optional)
-
-Use the included VESA mount bracket to attach the mini PC to the back of the TV:
-
-1. Screw the VESA bracket to the back of the TV (use the 4 screw holes)
-2. Clip the mini PC onto the bracket
-3. Route the HDMI cable and power cable neatly
-4. The mini PC is now hidden — out of sight, out of mind
-
----
-
-## How to Control It
-
-Once set up, you NEVER need to touch the mini PC again. Control everything from:
-
-- **Your phone:** Profile → TV Control (switch Regular/Stream/Game Day)
-- **Dashboard:** TV Board settings page (set stream URLs, sponsors, etc.)
-
----
-
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| Black screen on TV | Check HDMI input on TV, check power on mini PC |
-| TV Board not loading | Check WiFi connection, restart mini PC |
-| Chrome not opening on boot | Re-do Step 5 (startup shortcut) |
-| Screen goes black after a while | Re-do Step 6 (disable sleep) |
-| Need to change venue/token | Plug in mouse + keyboard, edit the startup shortcut |
-| WiFi changed at venue | Plug in mouse + keyboard, connect to new WiFi |
-
----
-
-## For Platform Admins: Provisioning Multiple Boxes
-
-When setting up boxes in bulk before shipping to venues:
-
-1. Complete Steps 1-6 on each box
-2. Name each PC sequentially: `MYREWRD-TV-001`, `MYREWRD-TV-002`, etc.
-3. For Step 4, use a placeholder URL — you'll update it per-venue later
-4. Register each box in the dashboard: Platform → TV Devices
-5. Ship the box to the venue with a one-page instruction card:
-   - "Plug HDMI into TV, plug power into wall, turn on TV to correct input"
-
-That's it. The venue literally just plugs in two cables.
-
----
-
-## Total Setup Time: ~15 minutes per box
-
-Once you've done it once, each additional box takes about 10 minutes.
+For rollback, restore the prior approved executable while retaining AppData. Power changes are independent: use Windows Power Options to restore the intended button actions and require sign-in setting if the PC is repurposed. Do not reset credentials or clear the persistent browser profile to fix wake behavior.
