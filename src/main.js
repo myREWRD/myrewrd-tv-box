@@ -480,7 +480,8 @@ async function checkForUpdate(latestVersion, downloadUrl, sha256) {
   if (!/^[a-f0-9]{64}$/i.test(sha256 || "") || blockedVersion(INSTALL_DIR, latestVersion)) return;
   isUpdating = true;
   try {
-    const previousExe = process.execPath;
+    const previousExe = Number(APP_VERSION.split(".")[0]) < 2 && process.env.PORTABLE_EXECUTABLE_FILE
+      ? process.env.PORTABLE_EXECUTABLE_FILE : process.execPath;
     const startupPath = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "myREWRD-TV-Box.bat");
     await prepareUpdate({ version: latestVersion, url: downloadUrl, sha256, installRoot: INSTALL_DIR,
       profile: app.getPath("userData"), startupPath, previousExe });
