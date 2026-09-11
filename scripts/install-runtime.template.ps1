@@ -3,6 +3,21 @@ param([switch]$NoRestart)
 $ErrorActionPreference = 'Stop'
 $env:PSModulePath = "$PSHOME\Modules"
 if ([Security.Principal.WindowsIdentity]::GetCurrent().Name -ine ($env:COMPUTERNAME+'\myrewrd')) { throw 'Run under the dedicated myrewrd Windows account as administrator.' }
+Add-Type -TypeDefinition @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class TVRuntimePaths {
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  public static extern uint GetLongPathName(string path, StringBuilder buffer, uint size);
+}
+"@
+function Get-CanonicalRuntimePath([string]$value) {
+  $buffer = [Text.StringBuilder]::new(32768)
+  $length = [TVRuntimePaths]::GetLongPathName([IO.Path]::GetFullPath($value),$buffer,32768)
+  if (!$length -or $length -ge 32768) { throw 'Cannot resolve installed runtime path' }
+  return $buffer.ToString()
+}
 $version = '@VERSION@'
 $runtimeHash = '@HASH@'
 $root = Join-Path $env:USERPROFILE 'myREWRD-TV-Box'
@@ -13,6 +28,7 @@ while ($parent) {
   $parent = $parent.Parent
 }
 [IO.Directory]::CreateDirectory($root) | Out-Null
+$root = Get-CanonicalRuntimePath $root
 $marker = Join-Path $root 'installed-runtime.json'
 $alreadyInstalled = $false
 $startup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\myREWRD-TV-Box.bat'
@@ -22,12 +38,12 @@ if (Test-Path -LiteralPath $marker) {
     $startupText = Get-Content -LiteralPath $startup -Raw
     $startupExecutable = $null
     if ($startupText -match '(?im)^\s*start\s+""\s+"([^"]+)"\s*$') {
-      $startupExecutable = [IO.Path]::GetFullPath($Matches[1])
+      $startupExecutable = Get-CanonicalRuntimePath $Matches[1]
     }
     foreach ($slot in @('runtime-a','runtime-b')) {
       $exe = Join-Path $root ($slot+'\myREWRD TV Box.exe')
       $releasePath = Join-Path $root ($slot+'\runtime-release.json')
-      if ($installed.layout -eq 'installed-ab-v1' -and $startupExecutable -and $startupExecutable.Equals([IO.Path]::GetFullPath($exe),[StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $releasePath)) {
+      if ($installed.layout -eq 'installed-ab-v1' -and $startupExecutable -and (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $releasePath) -and $startupExecutable.Equals((Get-CanonicalRuntimePath $exe),[StringComparison]::OrdinalIgnoreCase)) {
         $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
         if ($release.layout -eq 'installed-ab-v1') { $alreadyInstalled = $true }
       }
