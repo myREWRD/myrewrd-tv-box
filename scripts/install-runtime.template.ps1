@@ -20,10 +20,14 @@ if (Test-Path -LiteralPath $marker) {
   try {
     $installed = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json
     $startupText = Get-Content -LiteralPath $startup -Raw
+    $startupExecutable = $null
+    if ($startupText -match '(?im)^\s*start\s+""\s+"([^"]+)"\s*$') {
+      $startupExecutable = [IO.Path]::GetFullPath($Matches[1])
+    }
     foreach ($slot in @('runtime-a','runtime-b')) {
       $exe = Join-Path $root ($slot+'\myREWRD TV Box.exe')
       $releasePath = Join-Path $root ($slot+'\runtime-release.json')
-      if ($installed.layout -eq 'installed-ab-v1' -and $startupText.Contains('"'+$exe+'"') -and (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $releasePath)) {
+      if ($installed.layout -eq 'installed-ab-v1' -and $startupExecutable -and $startupExecutable.Equals([IO.Path]::GetFullPath($exe),[StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $exe) -and (Test-Path -LiteralPath $releasePath)) {
         $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
         if ($release.layout -eq 'installed-ab-v1') { $alreadyInstalled = $true }
       }
