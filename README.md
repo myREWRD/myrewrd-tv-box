@@ -1,12 +1,12 @@
 # myREWRD TV Box
 
-## Presentation candidate (1.0.6, not released)
+## Presentation and remote enrollment (1.0.7 candidate)
 
 The opt-in demo appliance can receive desired `tv_board`/`presentation` state through its existing poll. An isolated local WebRTC receiver supports Windows Chrome/Edge screen video; main-process control can destroy it even if its renderer freezes. No Chromecast, AirPlay, Miracast, audio capture, or adapter/hotspot switching is claimed.
 
-Initial setup imports **presentation-key.json** (generated runtime credential, never committed) from the install folder and encrypts it under AppData using Windows DPAPI. The server stores only the hash. Preserve the normal TV token and Chromium profile. Presentation sessions expire after two hours and default to TV Board when expired/invalid; a receiver restart renews the sharing session, requiring the laptop to select Share again. A known preconfigured demo hotspot is needed for headless use where destination Wi-Fi is unknown. Windows wake sign-in requires the existing dedicated power repair and physical acceptance; Electron cannot unlock Windows.
+Choose Set up receiver in Platform → TV Devices. The box generates its own 256-bit key, encrypts it under AppData with Windows DPAPI, and sends only a hash. Enter the code shown on the TV into the dashboard to approve the receiver; no keyboard or file transfer is required. The code is bound to a ten-minute session and immutable candidate hash, with five approval attempts. Only the internal myREWRD demo box supports this bootstrap; an existing trusted key cannot be silently replaced. Cancel setup or Launch TV Board closes the setup overlay. Advanced manual key import remains available for recovery. Preserve the normal TV token and Chromium profile. Presentation sessions expire after two hours and default to TV Board when expired/invalid; a receiver restart renews the sharing session, requiring the laptop to select Share again. A known preconfigured demo hotspot is needed for headless use where destination Wi-Fi is unknown. Windows wake sign-in requires the existing dedicated power repair and physical acceptance; Electron cannot unlock Windows.
 
-Run `npm run verify:presentation` plus existing wake, Live Game, sponsor, and updater suites. Canonical setup, security, relay configuration, release gate, and physical lifecycle checklist: dashboard `docs/product/TV_PRESENTATION.md`. Source merge can publish a Windows release; do not merge or advertise this candidate before approval.
+Run `node scripts/verify-enrollment.cjs` and `npm run verify:presentation` plus existing wake, Live Game, sponsor, and updater suites. Canonical setup, security, relay configuration, release gate, and physical lifecycle checklist: dashboard `docs/product/TV_PRESENTATION.md`. Source merge can publish a Windows release; do not merge or advertise this candidate before approval.
 
 The myREWRD TV Box is a remotely managed Electron application for Windows mini PCs connected to venue televisions. Venues connect power and HDMI; ongoing control stays in the venue app and dashboard rather than at the physical box.
 
