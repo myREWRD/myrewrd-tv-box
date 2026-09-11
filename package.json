@@ -1,9 +1,10 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
+    "verify:presentation": "node scripts/verify-presentation.cjs && node scripts/verify-presentation-receiver.cjs",
     "verify:wake-recovery": "node scripts/verify-wake-recovery.cjs",
     "start": "electron .",
     "verify:gameday-sponsor-logo": "node scripts/verify-gameday-sponsor-logo.mjs",
