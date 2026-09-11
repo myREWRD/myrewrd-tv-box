@@ -1,13 +1,15 @@
 // myREWRD TV Box — Main Electron Process
 // Manages: pairing, mode switching, HTTP polling control, DRM streaming, sponsor overlay, auto-update
 
-const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { prepareUpdate, createCandidate, blockedVersion } = require("./update");
 const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
 const { allowedNavigation } = require("./navigation");
+const { createPresentation } = require("./presentation");
+const { loadPresentationKey } = require("./presentation-key");
 
 // Recovery may race a completed restart if its result could not be written.
 // Only one process may own this device profile and visible board.
@@ -55,6 +57,7 @@ let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, e
 let overlayWindow = null; // Transparent overlay for sponsor bar
 let config = loadConfig();
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
+let boardStatus = "connecting";
 let configuredMode = "regular";
 let sponsorData = null;
 let isUpdating = false; // Prevent multiple simultaneous updates
@@ -62,6 +65,10 @@ let retryUpdateAfter = 0;
 let handoffRequested = false;
 let pollController = null;
 const providerWindows = new Set();
+let presentationKey = null;
+const presentation = createPresentation({ BrowserWindow, ipcMain, apiBase: API_BASE,
+  getToken: () => config.tvToken, getKey: () => presentationKey,
+  onExit: () => { if (mainWindow && !mainWindow.isDestroyed()) switchMode("regular"); } });
 const recovery = createRecovery({ restore: restoreBoard });
 const updateCandidate = createCandidate({
   argv: process.argv || [], installRoot: INSTALL_DIR, profile: app.getPath("userData"), version: APP_VERSION, app,
@@ -154,6 +161,7 @@ function createMainWindow() {
       && Boolean(config.paired && config.tvToken) && tokenFromBoardUrl(url, API_BASE) === config.tvToken;
   });
   mainWindow.webContents.on("did-finish-load", () => {
+    if (config.tvToken && tokenFromBoardUrl(mainWindow.webContents.getURL(), API_BASE) === config.tvToken) boardStatus = "ready";
     if (updateCandidate && boardNavigationSucceeded
         && tokenFromBoardUrl(mainWindow.webContents.getURL(), API_BASE) === config.tvToken) updateCandidate.boardReady();
   });
@@ -172,9 +180,9 @@ function createMainWindow() {
     if (responseCode >= 500) recovery.schedule(15000);
   });
   mainWindow.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3) recovery.schedule(15000);
+    if (isMainFrame && code !== -3) { boardStatus = "failed"; recovery.schedule(15000); }
   });
-  mainWindow.webContents.on("render-process-gone", () => recovery.schedule(5000));
+  mainWindow.webContents.on("render-process-gone", () => { boardStatus = "failed"; recovery.schedule(5000); });
 
   // Start in pairing mode or regular TV board
   if (!config.paired || !config.tvToken) {
@@ -193,6 +201,7 @@ function switchMode(mode, options = {}) {
   if (updateCandidate && !updateCandidate.active && mode !== "regular") return;
   recovery.cancel();
   currentMode = mode;
+  boardStatus = "connecting";
   console.log(`[TV Box] Switching display mode`);
 
   // Remove any existing stream view
@@ -321,6 +330,7 @@ function startPolling() {
 }
 
 async function pollForCommands() {
+  presentation.tick();
   if (!config.paired || !config.tvToken || (pollController && !pollController.signal.aborted)) return;
   const controller = new AbortController();
   pollController = controller;
@@ -328,11 +338,35 @@ async function pollForCommands() {
   try {
     const res = await fetch(
       `${API_BASE}/api/tv-box-command?token=${encodeURIComponent(config.tvToken)}&version=${encodeURIComponent(APP_VERSION)}`,
-      { signal: controller.signal }
+      { signal: controller.signal, headers: presentationKey ? { "X-TV-Presentation-Key": presentationKey } : {} }
     );
     if (!res.ok) return;
     const data = await res.json();
     if (controller.signal.aborted) return;
+
+    if (data.experience) {
+      if (JSON.stringify(config.experience) !== JSON.stringify(data.experience)) saveConfig({ experience: data.experience });
+      const presenting = presentation.reconcile(data.experience);
+      if (presenting) {
+        for (const window of providerWindows) if (!window.isDestroyed()) window.close();
+        // Dispose streaming playback before the dedicated receiver takes over.
+        if (currentMode !== "regular") switchMode("regular");
+      }
+      fetch(`${API_BASE}/api/tv-presentation`, { method: "POST",
+        headers: { "Content-Type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify({ token: config.tvToken, device_key: presentationKey, action: "report", revision: data.experience.revision,
+          ...presentation.report, ...(!presenting ? { receiver_status: boardStatus } : {}) }),
+      }).catch(() => {});
+      // Casting never blocks polling, but suppresses legacy venue navigation
+      // on this explicitly enabled demo appliance until TV Board is requested.
+      if (presenting) return;
+      // Explicit appliance TV Board owns this demo device; legacy URL commands
+      // must not replace it with a provider login or a local Game Day view.
+      data.pending_command = null;
+      data.mode = "regular";
+    } else if (presentation.active) {
+      presentation.stop(); saveConfig({ experience: null }); switchMode("regular");
+    }
 
     // Handle pending command from venue app (e.g., navigate to Hulu)
     if (data.pending_command) {
@@ -495,10 +529,11 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
+      presentation.stop();
       if (pollController) pollController.abort();
       if (pollInterval) clearInterval(pollInterval);
       pollInterval = null;
-      saveConfig({ tvToken: null, venueId: null, venueName: null, paired: false });
+      saveConfig({ tvToken: null, venueId: null, venueName: null, paired: false, experience: null });
       switchMode("regular");
       break;
 
@@ -537,7 +572,9 @@ ipcMain.on("switch-mode", (event, mode, options) => {
 
 // ─── App Lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+  presentationKey = safeStorage ? loadPresentationKey({ safeStorage, profile: app.getPath("userData"), installDir: INSTALL_DIR }) : null;
   createMainWindow();
+  if (config.paired && config.tvToken && presentationKey && !updateCandidate) presentation.reconcile(config.experience);
   powerMonitor.on("resume", () => recovery.schedule());
   powerMonitor.on("unlock-screen", () => recovery.schedule());
   powerMonitor.on("suspend", () => {
@@ -552,6 +589,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  presentation.stop();
   recovery.stop();
   if (pollController) pollController.abort();
   if (pollInterval) clearInterval(pollInterval);

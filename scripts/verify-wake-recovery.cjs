@@ -52,6 +52,8 @@ function boot(saved) {
       if (name === './sponsor') return require('../src/sponsor');
       if (name === './navigation') return require('../src/navigation');
       if (name === './update') return require('../src/update');
+      if (name === './presentation') return require('../src/presentation');
+      if (name === './presentation-key') return require('../src/presentation-key');
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,
