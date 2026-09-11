@@ -1,0 +1,20 @@
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const {execFileSync}=require('node:child_process');
+const version=require('../package.json').version;
+const zip=path.resolve('dist',`myREWRD.TV.Box.${version}.zip`),installer=path.resolve('dist',`myREWRD.TV.Box.${version}.setup.ps1`);
+const hash=crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
+assert.ok(fs.readFileSync(installer,'utf8').includes(`$runtimeHash = '${hash}'`));
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'tv-real-package-')),runtime=path.join(root,'runtime-a');
+const ps=path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
+execFileSync(ps,['-NoProfile','-ExecutionPolicy','Bypass','-File',path.resolve('src/expand-runtime.ps1'),'-ArchivePath',zip,'-Destination',runtime,'-ExpectedHash',hash,'-ExpectedVersion',version],{windowsHide:true,stdio:'inherit'});
+for(const helper of ['expand-runtime.ps1','assert-runtime-idle.ps1'])assert.deepEqual(fs.readFileSync(path.join(runtime,'resources','app.asar.unpacked','src',helper)),fs.readFileSync(path.resolve('src',helper)));
+const quote=s=>"'"+s.replaceAll("'","''")+"'";
+execFileSync(ps,['-NoProfile','-Command',`$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile(${quote(installer)},[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){$errors|Out-String|Write-Error;exit 1}`],{windowsHide:true,stdio:'inherit'});
+const probe=path.join(root,'probe.cjs');fs.writeFileSync(probe,`
+const fs=require('fs'),path=require('path');
+const {stageRuntime}=require(${JSON.stringify(path.join(runtime,'resources','app.asar','src','installed-runtime.js'))});
+stageRuntime({installRoot:${JSON.stringify(root)},previousExe:process.execPath,archive:${JSON.stringify(zip)},staging:${JSON.stringify(path.join(root,'staging'))},sha256:'${hash}',version:'${version}'}).then(exe=>{if(!exe.includes('runtime-b'))throw Error('Wrong slot');fs.writeFileSync(${JSON.stringify(path.join(root,'passed'))},exe)}).catch(e=>{console.error(e);process.exitCode=1});
+`);
+execFileSync(path.join(runtime,'myREWRD TV Box.exe'),[probe],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1'},cwd:root,windowsHide:true,stdio:'inherit',timeout:180000});
+assert.ok(fs.existsSync(path.join(root,'passed')));
+console.log('PASS actual Windows ZIP, installer syntax/hash, unpacked helpers, packaged Electron staging; '+hash);

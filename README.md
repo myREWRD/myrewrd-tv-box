@@ -1,5 +1,7 @@
 # myREWRD TV Box
 
+**2026-09-11 supersession:** Version 2.0.0 uses permanent installed runtime paths. See [installed runtime migration and recovery](INSTALLED_RUNTIME.md). Earlier portable instructions below are historical for 1.x only.
+
 ## Presentation and remote enrollment (1.0.7 candidate)
 
 The opt-in demo appliance can receive desired `tv_board`/`presentation` state through its existing poll. An isolated local WebRTC receiver supports Windows Chrome/Edge screen video; main-process control can destroy it even if its renderer freezes. No Chromecast, AirPlay, Miracast, audio capture, or adapter/hotspot switching is claimed.

@@ -24,13 +24,13 @@ Every task must assess durable impact on pairing, commands, device/venue authori
 
 1. **Keep this repository public.** The installer/updater performs unauthenticated release downloads.
 2. Never push directly to `main`; use a branch and pull request.
-3. Treat selected `main` changes as release-coupled because `build-windows.yml` can publish a portable executable.
+3. Treat selected `main` changes as release-coupled because `build-windows.yml` can publish an installed Windows ZIP and migration script.
 4. Never commit or log TV tokens, PINs, Wi-Fi passwords, streaming credentials, cookies, or provider sessions.
 5. Never accept arbitrary navigation targets; validate/allowlist HTTPS service and myREWRD URLs.
 6. Never weaken device/venue command scoping to fix connectivity.
 7. Preserve unattended operation: venues should not need keyboard/mouse or local software actions after installation.
 8. Maintain compatibility with older dashboard command payloads and deployed configuration formats.
-9. Do not describe a local/macOS/Linux build as production verification; production is Windows portable x64.
+9. Do not describe a local/macOS/Linux build as production verification; production is Windows installed x64 (legacy 1.x is portable).
 10. Do not publish a release without explicit approval and end-to-end updater validation.
 
 ## Pairing and command safety
@@ -54,7 +54,7 @@ Changing repository visibility is prohibited. Branch protection is absent at the
 ```bash
 npm install
 npm start
-npm run build:win-portable
+npm run build:win-installed
 ```
 
 There is no committed lockfile and no automated test/lint/type-check script at the audit date. Dependency installation is therefore not reproducible; add a lockfile in a dedicated PR. The 2026-08-25 temporary-lock production audit reported no vulnerabilities, but future scans must use the resolved release lock.

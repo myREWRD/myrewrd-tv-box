@@ -1,11 +1,19 @@
-name: Build Windows Portable
+name: Build Windows Installed
 
 on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'scripts/**'
+      - '.github/workflows/build-windows.yml'
   push:
     branches: [main]
     paths:
       - 'src/**'
       - 'package.json'
+      - 'scripts/**'
+      - '.github/workflows/build-windows.yml'
   workflow_dispatch:
 
 permissions:
@@ -25,21 +33,43 @@ jobs:
       - name: Install dependencies
         run: npm install
         
-      - name: Build portable exe
-        run: npm run build:win-portable
+      - name: Build installed runtime and migration
+        run: |
+          npm run build:win-installed -- --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/build-installer.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         
+      - name: Verify Windows runtime and recovery
+        run: |
+          node scripts/verify-installer.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-installed-update.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-installed-retry.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -File scripts/verify-runtime-extraction.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-installed-package.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: myREWRD-TV-Box-Windows
-          path: dist/*.exe
+          path: |
+            dist/*.zip
+            dist/*.setup.ps1
 
       - name: Upload to Release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: myREWRD TV Box (Latest)
-          files: dist/*.exe
+          files: |
+            dist/*.zip
+            dist/*.setup.ps1
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
