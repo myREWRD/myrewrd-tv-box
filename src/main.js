@@ -365,13 +365,23 @@ async function pollForCommands() {
         body: JSON.stringify({ token: config.tvToken, device_key: presentationKey, action: "report", revision: data.experience.revision,
           ...presentation.report, ...(!presenting ? { receiver_status: boardStatus } : {}) }),
       }).catch(() => {});
-      // Casting never blocks polling, but suppresses legacy venue navigation
-      // on this explicitly enabled demo appliance until TV Board is requested.
+      // Only active casting owns the surface. Enrolling a receiver must not
+      // disable the venue's existing streaming, Game Day or remote controls.
       if (presenting) return;
-      // Explicit appliance TV Board owns this demo device; legacy URL commands
-      // must not replace it with a provider login or a local Game Day view.
-      data.pending_command = null;
-      data.mode = "regular";
+      // A presentation/board request overrides older venue settings on this
+      // device only. A newer venue command/settings change releases ownership.
+      const requested = Date.parse(data.experience.requested_at || '');
+      let pending = data.pending_command;
+      try { if (typeof pending === 'string') pending = JSON.parse(pending); } catch { pending = null; }
+      const freshCommand = pending && Number(pending.ts) > requested;
+      if (Number.isFinite(requested) && !freshCommand) data.pending_command = null;
+      const freshSettings = Date.parse(data.updated_at || '') > requested;
+      if ((freshCommand || freshSettings) && config.releasedPresentationRevision !== data.experience.revision) {
+        saveConfig({ releasedPresentationRevision: data.experience.revision });
+      }
+      if (Number.isFinite(requested) && config.releasedPresentationRevision !== data.experience.revision) {
+        data.mode = 'regular'; data.pending_command = null;
+      }
     } else if (presentation.active) {
       presentation.stop(); saveConfig({ experience: null }); switchMode("regular");
     }
