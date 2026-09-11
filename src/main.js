@@ -9,7 +9,8 @@ const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
 const { allowedNavigation } = require("./navigation");
 const { createPresentation } = require("./presentation");
-const { loadPresentationKey } = require("./presentation-key");
+const { loadPresentationKey, ensurePresentationKey } = require("./presentation-key");
+const { createEnrollment } = require("./enrollment");
 
 // Recovery may race a completed restart if its result could not be written.
 // Only one process may own this device profile and visible board.
@@ -66,6 +67,11 @@ let handoffRequested = false;
 let pollController = null;
 const providerWindows = new Set();
 let presentationKey = null;
+const enrollment = createEnrollment({ BrowserWindow, apiBase: API_BASE, getToken: () => config.tvToken,
+  ensureKey: () => {
+    if (!presentationKey && safeStorage) presentationKey = ensurePresentationKey({ safeStorage, profile: app.getPath("userData"), installDir: INSTALL_DIR });
+    return presentationKey;
+  } });
 const presentation = createPresentation({ BrowserWindow, ipcMain, apiBase: API_BASE,
   getToken: () => config.tvToken, getKey: () => presentationKey,
   onExit: () => { if (mainWindow && !mainWindow.isDestroyed()) switchMode("regular"); } });
@@ -331,6 +337,7 @@ function startPolling() {
 
 async function pollForCommands() {
   presentation.tick();
+  enrollment.tick();
   if (!config.paired || !config.tvToken || (pollController && !pollController.signal.aborted)) return;
   const controller = new AbortController();
   pollController = controller;
@@ -344,6 +351,7 @@ async function pollForCommands() {
     const data = await res.json();
     if (controller.signal.aborted) return;
 
+    enrollment.reconcile(data.enrollment);
     if (data.experience) {
       if (JSON.stringify(config.experience) !== JSON.stringify(data.experience)) saveConfig({ experience: data.experience });
       const presenting = presentation.reconcile(data.experience);
@@ -529,6 +537,7 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
+      enrollment.stop();
       presentation.stop();
       if (pollController) pollController.abort();
       if (pollInterval) clearInterval(pollInterval);
@@ -589,6 +598,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  enrollment.stop();
   presentation.stop();
   recovery.stop();
   if (pollController) pollController.abort();

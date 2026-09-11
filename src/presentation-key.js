@@ -1,5 +1,21 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomBytes } = require('node:crypto');
+function ensurePresentationKey(options) {
+  const existing = loadPresentationKey(options);
+  if (existing) return existing;
+  if (!options.safeStorage.isEncryptionAvailable()) return null;
+  // Never overwrite an unreadable existing key: recovery must be explicit.
+  const file = path.join(options.profile, 'presentation-key.enc');
+  if (fs.existsSync(file)) return null;
+  try {
+    const key = randomBytes(32).toString('hex');
+    fs.mkdirSync(options.profile, { recursive: true });
+    fs.writeFileSync(`${file}.tmp`, options.safeStorage.encryptString(key));
+    fs.renameSync(`${file}.tmp`, file);
+    return key;
+  } catch { return null; }
+}
 // First-run import is consumed once. Electron safeStorage uses Windows DPAPI.
 function loadPresentationKey({ safeStorage, profile, installDir }) {
   if (!safeStorage.isEncryptionAvailable()) return null;
@@ -19,4 +35,4 @@ function loadPresentationKey({ safeStorage, profile, installDir }) {
     return /^[a-f0-9]{64}$/.test(key) ? key : null;
   } catch { return null; }
 }
-module.exports = { loadPresentationKey };
+module.exports = { loadPresentationKey, ensurePresentationKey };
