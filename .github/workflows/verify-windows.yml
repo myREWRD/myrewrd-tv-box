@@ -36,7 +36,7 @@ jobs:
       - name: Portable recovery after supervisor termination
         run: node scripts/verify-packaged-upgrade.cjs "${{ runner.temp }}/tv-fixtures" --kill-supervisor
       - name: Build unpublished production candidate
-        run: npm run build:win-portable -- --publish never
+        run: npm run build:win-installed -- --publish never
       # Legacy 1.0.4 handoff was reproduced as failing in runs 34383299598 and
       # 34384292590. It is deliberately unsupported and API-blocked: those boxes
       # require attended repair. Keep the standalone reproducer for diagnosis;
@@ -48,4 +48,4 @@ jobs:
           path: |
             ${{ runner.temp }}/tv-fixtures/run-*/**/*.json
             ${{ runner.temp }}/tv-fixtures/run-*/**/*.log
-            dist/*.exe
+            dist/*.zip
