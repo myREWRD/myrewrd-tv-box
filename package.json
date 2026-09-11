@@ -1,6 +1,6 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "1.0.8",
+  "version": "2.0.0",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
@@ -11,9 +11,9 @@
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
-    "build:win-portable": "electron-builder --win portable",
     "verify:live-game-takeover": "node scripts/verify-live-game-takeover.mjs",
-    "verify:update": "node scripts/verify-update.cjs"
+    "verify:update": "node scripts/verify-update.cjs",
+    "build:win-installed": "electron-builder --win zip"
   },
   "build": {
     "appId": "com.myrewrd.tvbox",
@@ -31,12 +31,13 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "zip",
           "arch": [
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "myREWRD.TV.Box.${version}.zip"
     },
     "linux": {
       "target": [
@@ -46,9 +47,10 @@
       "category": "AudioVideo"
     },
     "beforePack": "scripts/build-supervisor.cjs",
-    "portable": {
-      "unpackDirName": "myREWRD-TV-Box-1.0.8"
-    }
+    "afterPack": "scripts/write-runtime-manifest.cjs",
+    "asarUnpack": [
+      "src/*.ps1"
+    ]
   },
   "dependencies": {
     "electron-updater": "^6.1.0"

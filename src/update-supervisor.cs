@@ -134,7 +134,12 @@ static class Supervisor {
       manifest=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(file));version=Value("version");
       if(Value("nonce")!=nonce || !Regex.IsMatch(version,"^\\d+\\.\\d+\\.\\d+$")) throw new Exception();
       foreach(string exe in new[]{Value("previousExe"),Value("candidateExe")}) {
-        if(!EqualPath(Path.GetDirectoryName(exe),root) || !String.Equals(Path.GetExtension(exe),".exe",StringComparison.OrdinalIgnoreCase) || !File.Exists(exe)) throw new Exception();
+        bool installed=manifest.ContainsKey("installed") && Convert.ToBoolean(manifest["installed"]);
+        bool validLocation=installed
+          ? (EqualPath(exe,Path.Combine(root,"runtime-a","myREWRD TV Box.exe")) || EqualPath(exe,Path.Combine(root,"runtime-b","myREWRD TV Box.exe")))
+          : EqualPath(Path.GetDirectoryName(exe),root);
+        if(!validLocation || !String.Equals(Path.GetExtension(exe),".exe",StringComparison.OrdinalIgnoreCase) || !File.Exists(exe)) throw new Exception();
+        if(installed && EqualPath(Value("previousExe"),Value("candidateExe"))) throw new Exception();
       }
       if(watching) return Watch(root,args[2],args[3]);
       phase="verifying-artifacts";

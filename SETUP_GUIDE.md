@@ -1,5 +1,7 @@
 # myREWRD TV Box setup and wake recovery
 
+**2026-09-11 supersession:** Version 2.0.0 uses permanent installed runtime paths. See [installed runtime migration and recovery](INSTALLED_RUNTIME.md). Earlier portable instructions below are historical for 1.x only.
+
 Hardware target: GMKtec G3S Windows mini PC. This supersedes the old manual Chrome startup instructions; the supported client is the Electron appliance.
 
 ## Install once

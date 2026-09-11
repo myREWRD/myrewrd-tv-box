@@ -51,7 +51,7 @@ function guardNavigation(contents) {
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
 const API_BASE = "https://app.myrewrd.com";
 const APP_VERSION = app.getVersion(); // reads from package.json "version"
-const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || "C:\\Users\\myrewrd\\myREWRD-TV-Box";
+const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.join(app.getPath("home"), "myREWRD-TV-Box");
 
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
@@ -480,7 +480,7 @@ async function checkForUpdate(latestVersion, downloadUrl, sha256) {
   if (!/^[a-f0-9]{64}$/i.test(sha256 || "") || blockedVersion(INSTALL_DIR, latestVersion)) return;
   isUpdating = true;
   try {
-    const previousExe = process.env.PORTABLE_EXECUTABLE_FILE;
+    const previousExe = process.execPath;
     const startupPath = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "myREWRD-TV-Box.bat");
     await prepareUpdate({ version: latestVersion, url: downloadUrl, sha256, installRoot: INSTALL_DIR,
       profile: app.getPath("userData"), startupPath, previousExe });

@@ -8,7 +8,7 @@ using System.Web.Script.Serialization;
 class UpdateFixture {
   static JavaScriptSerializer json = new JavaScriptSerializer();
   static void Main(string[] args) {
-    string root=Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+    string root=Environment.CurrentDirectory;
     if(args.Length>0 && args[0]=="--original") {
       var self=Process.GetCurrentProcess();
       File.WriteAllText(Path.Combine(root,"original.json"),json.Serialize(new {pid=self.Id,startedAt=new DateTimeOffset(self.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds()}));
