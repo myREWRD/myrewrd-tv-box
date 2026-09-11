@@ -5,14 +5,14 @@ const { pathToFileURL } = require('node:url');
 // waits for it, so remote exit can destroy even an unresponsive receiver.
 function createPresentation({ BrowserWindow, ipcMain, apiBase, getToken, getKey, onExit }) {
   const page = path.join(__dirname, 'pages', 'presentation.html');
-  let window = null, state = null, status = 'ready', pulse = 0;
+  let window = null, state = null, status = 'ready', pulse = 0, failedAt = 0, endedSession = null;
   const trusted = event => window && event.sender === window.webContents
     && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pathToFileURL(page).href;
   function stop() {
     state = null;
     if (window && !window.isDestroyed()) window.destroy();
     window = null;
-    status = 'ready';
+    status = 'ready'; failedAt = 0;
   }
   function reconcile(next) {
     if (!next || next.desired_mode !== 'presentation' || !/^[a-f0-9-]{36}$/i.test(next.session_id || '')
@@ -20,6 +20,7 @@ function createPresentation({ BrowserWindow, ipcMain, apiBase, getToken, getKey,
       if (state) { stop(); onExit(); }
       return false;
     }
+    if (next.session_id === endedSession) return false;
     if (state?.session_id === next.session_id && window && !window.isDestroyed()) { window.show(); return true; }
     stop(); state = next; status = 'connecting'; pulse = Date.now();
     window = new BrowserWindow({ fullscreen: true, kiosk: true, frame: false, backgroundColor: '#071721',
@@ -49,18 +50,20 @@ function createPresentation({ BrowserWindow, ipcMain, apiBase, getToken, getKey,
   ipcMain.on('presentation-status', (event, value) => {
     if (!trusted(event) || !['ready','connecting','connected','failed','offline'].includes(value)) return;
     pulse = Date.now(); status = value;
+    if (['failed', 'offline'].includes(value)) { if (!failedAt) failedAt = Date.now(); }
+    else failedAt = 0;
   });
   return {
     reconcile, stop,
     tick() {
       if (!state) return;
       if (!(Date.parse(state.expires_at) > Date.now())) { stop(); onExit(); }
-      else if (!window || window.isDestroyed() || Date.now() - pulse > 30000) {
-        const next = state; stop(); reconcile(next);
+      else if ((failedAt && Date.now() - failedAt >= 5000) || !window || window.isDestroyed() || Date.now() - pulse > 30000) {
+        endedSession = state.session_id; stop(); onExit();
       }
     },
     get active() { return Boolean(state); },
-    get report() { return { reported_mode: state ? 'presentation' : 'tv_board', receiver_status: status }; },
+    get report() { return { ended_session_id: endedSession, reported_mode: state ? 'presentation' : 'tv_board', receiver_status: status }; },
   };
 }
 module.exports = { createPresentation };

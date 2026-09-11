@@ -1,6 +1,6 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
@@ -45,7 +45,10 @@
       ],
       "category": "AudioVideo"
     },
-    "beforePack": "scripts/build-supervisor.cjs"
+    "beforePack": "scripts/build-supervisor.cjs",
+    "portable": {
+      "unpackDirName": "myREWRD-TV-Box-1.0.8"
+    }
   },
   "dependencies": {
     "electron-updater": "^6.1.0"
