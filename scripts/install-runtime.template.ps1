@@ -71,9 +71,9 @@ if (!$resume) { [IO.Directory]::Move((Join-Path $stage 'payload'),$runtime) }
 try {
   $startupTemp = $startup+'.install.tmp'
   [IO.File]::WriteAllText($startupTemp,('@echo off'+"`r`n"+'start "" "'+(Join-Path $runtime 'myREWRD TV Box.exe')+'"'+"`r`n"),[Text.UTF8Encoding]::new($false))
-  if (Test-Path -LiteralPath $startup) { [IO.File]::Replace($startupTemp,$startup,$null) } else { [IO.File]::Move($startupTemp,$startup) }
+  if (Test-Path -LiteralPath $startup) { [IO.File]::Replace($startupTemp,$startup,(Join-Path $stage 'startup.replaced.bak')) } else { [IO.File]::Move($startupTemp,$startup) }
   [IO.File]::WriteAllText(($marker+'.tmp'),('{"layout":"installed-ab-v1","initialVersion":"'+$version+'"}'))
-  if (Test-Path -LiteralPath $marker) { [IO.File]::Replace(($marker+'.tmp'),$marker,$null) } else { [IO.File]::Move(($marker+'.tmp'),$marker) }
+  if (Test-Path -LiteralPath $marker) { [IO.File]::Replace(($marker+'.tmp'),$marker,(Join-Path $stage 'marker.replaced.bak')) } else { [IO.File]::Move(($marker+'.tmp'),$marker) }
 } catch {
   if ($previousStartup) { [IO.File]::WriteAllBytes($startup,$previousStartup) }
   elseif (Test-Path -LiteralPath $startup) { Remove-Item -LiteralPath $startup }

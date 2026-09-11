@@ -23,8 +23,11 @@ jobs:
       - name: Source regressions
         run: |
           node scripts/verify-wake-recovery.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-gameday-sponsor-logo.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-live-game-takeover.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows process failure recovery
         run: node scripts/verify-update.cjs
       - name: Build isolated portable test applications
