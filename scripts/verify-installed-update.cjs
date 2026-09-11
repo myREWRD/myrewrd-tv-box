@@ -25,7 +25,7 @@ async function run() {
   assert.throws(() => validateArtifact(valid, '0'.repeat(64)), /checksum mismatch/);
   const invalid = path.join(root, 'invalid.exe'); fs.writeFileSync(invalid, Buffer.alloc(padded.length));
   assert.throws(() => validateArtifact(invalid, sha256), /Invalid update/);
-  const cases = process.argv.slice(2).length ? process.argv.slice(2) : ['success', 'reverse', 'exit', 'no-ready', 'no-active', 'diagnostics-failure', 'supervisor-exit'];
+  const cases = process.argv.slice(2).length ? process.argv.slice(2) : ['success', 'reverse', 'busy-inactive', 'exit', 'no-ready', 'no-active', 'diagnostics-failure', 'supervisor-exit'];
   for (const mode of cases) {
     const installRoot = path.join(root, mode); fs.mkdirSync(installRoot);
     const activeSlot = mode === 'reverse' ? 'runtime-b' : 'runtime-a';
@@ -50,6 +50,26 @@ async function run() {
     const quote=value=>"'"+value.replaceAll("'","''")+"'";
     execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Add-Type -AssemblyName System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::CreateFromDirectory(${quote(payload)},${quote(archive)})`],{windowsHide:true});
     const archiveHash=crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
+    if (mode === 'busy-inactive') {
+      const busyExe = path.join(installRoot, nextSlot, 'myREWRD TV Box.exe');
+      fs.mkdirSync(path.dirname(busyExe)); fs.copyFileSync(fixture, busyExe);
+      const busyRoot = path.join(installRoot, 'busy-owner'); fs.mkdirSync(busyRoot);
+      const busy = spawn(busyExe, ['--original'], { cwd: busyRoot, windowsHide: true, stdio: 'ignore' });
+      try {
+        await until(() => fs.existsSync(path.join(busyRoot, 'original.json')), 'busy inactive process', 10000);
+        await assert.rejects(prepareUpdate({version:'2.0.1',url:'https://github.com/myREWRD/myrewrd-tv-box/releases/download/latest/myREWRD.TV.Box.2.0.1.zip',sha256:archiveHash,installRoot,profile,startupPath,previousExe,parentExe:previousExe,download:async(_url,file)=>fs.copyFileSync(archive,file)}));
+        assert.deepEqual(fs.readFileSync(previousExe),fs.readFileSync(fixture));
+        assert.deepEqual(fs.readFileSync(busyExe),fs.readFileSync(fixture));
+        assert.deepEqual(fs.readFileSync(startupPath),original);
+        assert.equal(blockedVersion(installRoot,'2.0.1'),false);
+        console.log('PASS busy inactive runtime denied before replacement; both apps and startup preserved');
+      } finally {
+        fs.writeFileSync(path.join(installRoot,'shutdown'),'exit');
+        fs.writeFileSync(path.join(busyRoot,'shutdown'),'exit');
+        busy.unref();
+      }
+      continue;
+    }
     const savedAppData = process.env.APPDATA; process.env.APPDATA = profile;
     let job;
     try {

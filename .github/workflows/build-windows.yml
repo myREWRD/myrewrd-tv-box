@@ -35,7 +35,7 @@ jobs:
         
       - name: Build installed runtime and migration
         run: |
-          npm run build:win-installed
+          npm run build:win-installed -- --publish never
           node scripts/build-installer.cjs
         
       - name: Verify Windows runtime and recovery

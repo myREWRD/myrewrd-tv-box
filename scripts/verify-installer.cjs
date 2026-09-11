@@ -21,7 +21,9 @@ let script=fs.readFileSync(path.join(__dirname,'install-runtime.template.ps1'),'
 const testScript=path.join(root,'mock-installer.ps1');fs.writeFileSync(testScript,script);
 function run(home,noRestart=false,expectFailure=false){
  fs.mkdirSync(home,{recursive:true});const appdata=path.join(home,'AppData');fs.mkdirSync(appdata,{recursive:true});
- try{execFileSync(ps,['-NoProfile','-ExecutionPolicy','Bypass','-File',testScript,...(noRestart?['-NoRestart']:[])],{env:{...process.env,USERPROFILE:home,APPDATA:appdata},windowsHide:true,stdio:'pipe'});assert.equal(expectFailure,false,'expected failure');}catch(e){if(!expectFailure)throw e;}
+ let failed=false;
+ try{execFileSync(ps,['-NoProfile','-ExecutionPolicy','Bypass','-File',testScript,...(noRestart?['-NoRestart']:[])],{env:{...process.env,USERPROFILE:home,APPDATA:appdata},windowsHide:true,stdio:'pipe'});}catch(e){failed=true;if(!expectFailure)throw e;}
+ assert.equal(failed,expectFailure,'installer process failure expectation');
  return path.join(home,'myREWRD-TV-Box');
 }
 function startup(home){return path.join(home,'AppData','Microsoft','Windows','Start Menu','Programs','Startup','myREWRD-TV-Box.bat');}
