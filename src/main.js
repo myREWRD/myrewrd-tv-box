@@ -11,6 +11,7 @@ const { allowedNavigation } = require("./navigation");
 const { createPresentation } = require("./presentation");
 const { loadPresentationKey, ensurePresentationKey } = require("./presentation-key");
 const { createEnrollment } = require("./enrollment");
+const { createRemoteStatus } = require("./remote-status");
 
 // Recovery may race a completed restart if its result could not be written.
 // Only one process may own this device profile and visible board.
@@ -80,6 +81,9 @@ const updateCandidate = createCandidate({
   argv: process.argv || [], installRoot: INSTALL_DIR, profile: app.getPath("userData"), version: APP_VERSION, app,
   activate() { mainWindow.show(); mainWindow.focus(); startPolling(); fetchSponsorData(); },
 });
+const remoteStatus = createRemoteStatus({ apiBase: API_BASE, getToken: () => config.tvToken,
+  getKey: () => presentationKey,
+  canReport: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)) });
 
 function restoreBoard() {
   if (handoffRequested || (updateCandidate && !updateCandidate.active)) return;
@@ -336,6 +340,7 @@ function startPolling() {
 }
 
 async function pollForCommands() {
+  void remoteStatus.tick();
   presentation.tick();
   enrollment.tick();
   if (!config.paired || !config.tvToken || (pollController && !pollController.signal.aborted)) return;
@@ -548,6 +553,7 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
+      remoteStatus.stop();
       enrollment.stop();
       presentation.stop();
       if (pollController) pollController.abort();
@@ -598,6 +604,7 @@ app.whenReady().then(() => {
   powerMonitor.on("resume", () => recovery.schedule());
   powerMonitor.on("unlock-screen", () => recovery.schedule());
   powerMonitor.on("suspend", () => {
+    remoteStatus.stop();
     recovery.cancel();
     if (pollController) pollController.abort();
   });
@@ -609,6 +616,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  remoteStatus.stop();
   enrollment.stop();
   presentation.stop();
   recovery.stop();
