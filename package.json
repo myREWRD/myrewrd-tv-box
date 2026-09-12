@@ -1,6 +1,6 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {

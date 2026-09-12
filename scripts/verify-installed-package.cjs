@@ -7,7 +7,7 @@ assert.ok(fs.readFileSync(installer,'utf8').includes(`$runtimeHash = '${hash}'`)
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'tv-real-package-')),runtime=path.join(root,'runtime-a');
 const ps=path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
 execFileSync(ps,['-NoProfile','-ExecutionPolicy','Bypass','-File',path.resolve('src/expand-runtime.ps1'),'-ArchivePath',zip,'-Destination',runtime,'-ExpectedHash',hash,'-ExpectedVersion',version],{windowsHide:true,stdio:'inherit'});
-for(const helper of ['expand-runtime.ps1','assert-runtime-idle.ps1'])assert.deepEqual(fs.readFileSync(path.join(runtime,'resources','app.asar.unpacked','src',helper)),fs.readFileSync(path.resolve('src',helper)));
+for(const helper of ['expand-runtime.ps1','assert-runtime-idle.ps1','remote-status.ps1'])assert.deepEqual(fs.readFileSync(path.join(runtime,'resources','app.asar.unpacked','src',helper)),fs.readFileSync(path.resolve('src',helper)));
 const quote=s=>"'"+s.replaceAll("'","''")+"'";
 execFileSync(ps,['-NoProfile','-Command',`$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile(${quote(installer)},[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){$errors|Out-String|Write-Error;exit 1}`],{windowsHide:true,stdio:'inherit'});
 const probe=path.join(root,'probe.cjs');fs.writeFileSync(probe,`

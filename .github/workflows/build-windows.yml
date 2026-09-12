@@ -42,6 +42,10 @@ jobs:
         
       - name: Verify Windows runtime and recovery
         run: |
+          node scripts/verify-remote-status.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -File scripts/verify-remote-status.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-installer.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-installed-update.cjs

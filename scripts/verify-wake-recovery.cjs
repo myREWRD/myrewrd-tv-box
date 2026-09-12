@@ -55,6 +55,7 @@ function boot(saved) {
       if (name === './presentation') return require('../src/presentation');
       if (name === './presentation-key') return require('../src/presentation-key');
       if (name === './enrollment') return require('../src/enrollment');
+      if (name === './remote-status') return { createRemoteStatus: () => ({ tick: async () => {}, stop() {} }) };
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,

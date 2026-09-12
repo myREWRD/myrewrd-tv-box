@@ -1,5 +1,13 @@
 # myREWRD TV Box
 
+## Remote-maintenance status — 2026-09-12
+
+Version 2.0.1 adds read-only Windows status sampling every 60 seconds when paired and receiver-key enrolled. A bounded hidden PowerShell probe checks the Google-signed host executable, presence of host configuration filenames (never contents), and the `chromoting` service. The service name was verified from the official Google host MSI ServiceInstall table. Errors/permissions failures produce unknown values; absence is distinct. No host software is installed or registered by this probe.
+
+Fresh samples use `/api/tv-presentation` action `remote_status` with the existing device token and DPAPI receiver secret. Fields are `host_installed`, `registration_present`, `service_state` (running/stopped/missing/unknown), and `reporter_version: "1"`. The process never logs credentials or provider configuration and does not retry cached samples. Suspend, unpair, and shutdown abort pending reporting; inactive update candidates do not report. Host configuration/service status is not evidence of remote connectivity, Google account ownership, UAC operation, or successful reboot/reconnect. Backend status must expire when fresh authenticated reports stop.
+
+Validation: `node scripts/verify-remote-status.cjs` and `powershell.exe -NoProfile -File scripts/verify-remote-status.ps1` use fixtures/mocks and do not install or enroll Google software. Windows release CI runs both; packaged PowerShell remains under the existing `src/*.ps1` asar-unpack rule.
+
 **2026-09-11 supersession:** Version 2.0.0 uses permanent installed runtime paths. See [installed runtime migration and recovery](INSTALLED_RUNTIME.md). Earlier portable instructions below are historical for 1.x only.
 
 ## Presentation and remote enrollment (1.0.7 candidate)
