@@ -1,5 +1,7 @@
 # Game Day protected playback — 2026-09-13
 
+[VERIFIED 2026-09-13 — signing supersession] The owner completed free EVS signup using colin@myrewrd.com. The reviewed runtime at source commit `10383a82e7cb400ad34b2b831c75788f1426e7d6` has a verified streaming VMP signature. Signed ZIP SHA256 `e06722a950deab4f20adb7f5412a2b052400aa9539e8c9cc8f265fa84d515f6a` (153212486 bytes) passed actual Windows package/installer/staging validation and an unauthenticated public-download hash check. It is published as the versioned 2.1.0 asset under the existing latest release; no fleet offer was promoted. Both Windows CI workflows passed. Dashboard PR #1988 supplies an exact-device, exact-digest, expiring test offer. Physical installation and actual YouTube TV playback remain acceptance gates. This supersedes the account/signing/publication status below; the source remains a candidate and CI credentials/version approval are not configured by signup.
+
 Status: development candidate, not released. Owner reports the same YouTube TV NFL stream plays in Chrome on the TV computer but fails in TV Box with “video format is not supported”. This isolates the embedded player as the likely cause; it is not a captured provider error diagnosis.
 
 ## Change
