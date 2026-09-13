@@ -1,5 +1,9 @@
 # myREWRD TV Box
 
+## Game Day protected playback candidate (2.1.0)
+
+The Windows candidate uses CastLabs ECS with runtime Widevine initialization and explicit production VMP signing. It retains the Game Day sponsor strip, remote controls and existing sessions. Development builds are not proof of YouTube TV playback. See [protected playback implementation and acceptance](docs/PROTECTED_PLAYBACK.md) before building or releasing. Provider playback, signing-account setup and physical Windows update acceptance remain pending; no production rollout is included.
+
 ## Remote-maintenance status — 2026-09-12
 
 Version 2.0.1 adds read-only Windows status sampling every 60 seconds when paired and receiver-key enrolled. A bounded hidden PowerShell probe checks the Google-signed host executable, presence of host configuration filenames (never contents), and the `chromoting` service. The service name was verified from the official Google host MSI ServiceInstall table. Errors/permissions failures produce unknown values; absence is distinct. No host software is installed or registered by this probe.
