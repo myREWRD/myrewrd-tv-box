@@ -20,6 +20,8 @@ PR builds explicitly set `TV_DRM_DEVELOPMENT_BUILD=1`; their runtime-release.jso
 
 ## Acceptance and recovery
 
+[VERIFIED DELIVERY STATUS 2026-09-13 23:34 UTC] Dashboard PR #1988 production is READY and its scoped offer is active until September 14 01:27:30 UTC (private audit 690). The owner-approved live API diagnostic returned the exact signed 2.1.0 release, but subsequent device polls still report 2.0.1. Remote Desktop connection is required to inspect the local updater; installation and actual playback are unverified. No fleet offer changed.
+
 Local evidence on 2026-09-13: protected-playback and wake-recovery behavioral tests passed, as did sponsor/Live Games/presentation regressions. Real Windows ECS tests passed first-install Widevine readiness and sandboxed H.264/AAC MediaKeys, including a view created before component initialization. The development ZIP (SHA256 `0c8063d89fb229ef7d66d755740bb774b728b61d9c394768053374c99cc86381`) passed actual installer syntax/hash, safe extraction, unpacked helpers and packaged Electron A/B staging. Native supervisor success, reverse-slot, busy-runtime denial, exit/no-ready/no-active/diagnostic-failure/watchdog rollback and interrupted-download retry tests passed. Independent review found no remaining actionable defects after refresh and status-recovery fixes. None of this is signed YouTube TV playback acceptance.
 
 - Run protected-playback, wake-recovery, sponsor, Live Games takeover, presentation and installed-update regressions.
