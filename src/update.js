@@ -1,9 +1,10 @@
-const fs = require('node:fs');
+const fs = require('./runtime-fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const https = require('node:https');
 const { spawn } = require('node:child_process');
 const { slotFor, stageRuntime, assertPlainTree } = require('./installed-runtime');
+const scriptRoot = __dirname.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked');
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 function read(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }
@@ -122,7 +123,7 @@ async function prepareUpdate({ version, url, sha256, installRoot, profile, start
   const manifestPath = path.join(directory, 'manifest.json');
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   const supervisor = path.join(directory, 'supervisor.exe');
-  fs.copyFileSync(path.join(__dirname, 'update-supervisor.exe'), supervisor);
+  fs.copyFileSync(path.join(scriptRoot, 'update-supervisor.exe'), supervisor);
   const job = { ...manifest, directory };
   let failed = false;
   const errorLog = fs.openSync(path.join(directory, 'supervisor-errors.log'), 'a');

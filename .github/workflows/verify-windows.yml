@@ -42,6 +42,8 @@ jobs:
         env:
           TV_DRM_DEVELOPMENT_BUILD: '1'
         run: npm run build:win-installed -- --publish never
+      - name: Normal Electron physical runtime files
+        run: node scripts/verify-runtime-files.cjs
       # Legacy 1.0.4 handoff was reproduced as failing in runs 34383299598 and
       # 34384292590. It is deliberately unsupported and API-blocked: those boxes
       # require attended repair. Keep the standalone reproducer for diagnosis;

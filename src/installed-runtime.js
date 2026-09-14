@@ -1,4 +1,4 @@
-const fs = require('node:fs');
+const fs = require('./runtime-fs');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
