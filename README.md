@@ -136,3 +136,7 @@ Read [`AGENTS.md`](AGENTS.md) before editing. Cross-platform TV and operations d
 Owner approved local-network presentation for all current/future devices. Version 1.0.8 returns to the regular board after five seconds of failed/offline receiver status; an unresponsive renderer falls back within the watchdog limit. The ended session cannot reopen from stale polling, and a key-authenticated report clears only the matching backend session/revision. A new presentation starts a new session. Ending sharing or leaving the laptop TV Devices page closes sharing; other venue modes/controls remain available when casting is inactive.
 
 The portable extraction directory is deliberately versioned: myREWRD-TV-Box-1.0.8 under the kiosk user's TEMP directory. Build validation requires it to match the release version. Administrator setup must install exact-runtime TCP/UDP LocalSubnet firewall rules before first use. Existing installations still need attended firewall approval for a new runtime path. Do not substitute a single permanent extraction directory: launcher cleanup can race with updates. Release checklist: verify executable checksum and embedded runtime directory; update dashboard installer version/hash and rules together; physically test clean Windows local-network casting. This does not claim an existing box can remotely elevate or that future updates inherit previous per-version firewall permissions.
+
+## Venue app provider remote (candidate)
+
+See [provider remote setup and release gates](docs/PROVIDER_REMOTE.md). This source is not a fleet release.
