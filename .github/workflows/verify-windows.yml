@@ -33,6 +33,7 @@ jobs:
       - name: Windows process failure recovery
         run: |
           node scripts/verify-update.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-attended-profile.cjs
       - name: Build isolated portable test applications
         run: node scripts/build-packaged-fixtures.cjs "${{ runner.temp }}/tv-fixtures"
