@@ -12,6 +12,7 @@ const { createPresentation } = require("./presentation");
 const { loadPresentationKey, ensurePresentationKey } = require("./presentation-key");
 const { createEnrollment } = require("./enrollment");
 const { createRemoteStatus } = require("./remote-status");
+const { createProviderRemote, applyRemoteCommand } = require("./provider-remote");
 const { createProtectedPlayback } = require("./protected-playback");
 const protectedPlayback = createProtectedPlayback({ components });
 
@@ -89,8 +90,17 @@ const updateCandidate = createCandidate({
 const remoteStatus = createRemoteStatus({ apiBase: API_BASE, getToken: () => config.tvToken,
   getKey: () => presentationKey,
   canReport: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)) });
+const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () => config.tvToken, getKey: () => presentationKey,
+  canPoll: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)),
+  apply: command => applyRemoteCommand(command, {
+    getView: () => streamView,
+    canControl: () => currentMode === 'gameday' && !presentation.active && !providerWindows.size && !isUpdating,
+    openProvider: url => loadGameDayStream(url), focus: () => mainWindow?.focus(),
+  }),
+});
 
 function restoreBoard() {
+  providerRemote.stop();
   if (handoffRequested || (updateCandidate && !updateCandidate.active)) return;
   for (const window of providerWindows) if (!window.isDestroyed()) window.close();
   // Discard responses begun before sleep; the server remains the mode authority.
@@ -365,12 +375,14 @@ function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = null;
   if (!config.paired || !config.tvToken) return;
+  providerRemote.resume();
   console.log("[TV Box] Starting HTTP polling for commands...");
   pollForCommands();
   pollInterval = setInterval(pollForCommands, 5000);
 }
 
 async function pollForCommands() {
+  void providerRemote.tick();
   void remoteStatus.tick();
   presentation.tick();
   enrollment.tick();
@@ -587,6 +599,7 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
+      providerRemote.stop();
       remoteStatus.stop();
       enrollment.stop();
       presentation.stop();
@@ -638,6 +651,7 @@ app.whenReady().then(() => {
   powerMonitor.on("resume", () => recovery.schedule());
   powerMonitor.on("unlock-screen", () => recovery.schedule());
   powerMonitor.on("suspend", () => {
+    providerRemote.stop();
     remoteStatus.stop();
     recovery.cancel();
     if (pollController) pollController.abort();
@@ -650,6 +664,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  providerRemote.stop();
   streamRequest++;
   clearTimeout(streamRetry);
   remoteStatus.stop();

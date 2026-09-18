@@ -22,6 +22,8 @@ jobs:
       - run: npm install
       - name: Source regressions
         run: |
+          node scripts/verify-provider-remote.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-wake-recovery.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-gameday-sponsor-logo.mjs
