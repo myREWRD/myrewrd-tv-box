@@ -140,3 +140,7 @@ The portable extraction directory is deliberately versioned: myREWRD-TV-Box-1.0.
 ## Venue app provider remote (candidate)
 
 See [provider remote setup and release gates](docs/PROVIDER_REMOTE.md). This source is not a fleet release.
+
+## TV control 2.3.0 source contract (2026-09-18)
+
+The coordinated dashboard/app/box release restores Regular TV Board, Live Stream and Game Day. Game Day supports selected-TV Play saved URL without toggling mode. An explicit live remote uses an eight-second receiver lease, fixed 15-minute session, provider-only preview and bounded pointer input. Mobile opens a first-party browser with a one-use scoped handoff; no native dependency/runtime change. Main-page navigation ends the current connection; Start again reconnects. Protected video can appear black in previews. Same-network peer connectivity is required unless TURN is configured. Signed Windows/physical playback and fleet promotion remain separate gates. Canonical contract and validation: ssdt-dashboard/docs/product/TV_LIVE_REMOTE.md.
