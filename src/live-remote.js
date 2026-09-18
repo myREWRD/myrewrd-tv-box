@@ -1,6 +1,7 @@
 const path = require('path');
 const { performance } = require('perf_hooks');
 const { providerPage } = require('./provider-remote');
+const { hiddenChildFramesCode } = require('./preview-frame-visibility');
 
 function previewPage(url) {
   if (!providerPage(url)) return false;
@@ -46,14 +47,35 @@ function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, g
     if (!trusted(event) || capturing || performance.now()-lastCapture<120) return null;
     capturing = true; lastCapture = performance.now();
     const target = view, id = session.id;
+    let main, tree, identities;
+    const sameTree = () => {
+      if (!valid() || session?.id!==id || target.webContents.mainFrame!==main) return false;
+      const current = main.framesInSubtree;
+      return current.length===identities.length && identities.every((entry,index) => {
+        const frame=current[index];
+        return frame===entry.frame && !frame.detached && !frame.isDestroyed?.() && frame.frameToken===entry.token
+          && frame.processId===entry.process && frame.routingId===entry.routing && frame.url===entry.url;
+      });
+    };
     let stage = 'pre-scan';
     try {
+      main = target.webContents.mainFrame;
+      tree = main.framesInSubtree;
+      identities = tree.map(frame => ({ frame, token:frame.frameToken, process:frame.processId, routing:frame.routingId, url:frame.url }));
       // Check every frame and open shadow root. Only a boolean crosses this boundary.
       // Account names/menus may be visible in provider previews; no credential values are read.
       const check = async () => {
-        const frames = target.webContents.mainFrame.framesInSubtree;
+        if (!sameTree()) throw { reason:'frame-exception', stage };
+        const frames = tree;
         if (frames.length > 50) throw { reason:'frame-limit', stage, frameCount:frames.length };
-        const results = await Promise.all(frames.map(async frame => {
+        let hiddenChildren = false;
+        if (frames.length > 1) {
+          const geometry = await target.webContents.executeJavaScriptInIsolatedWorld(1002,[{code:hiddenChildFramesCode}]);
+          if (!sameTree()) throw { reason:'frame-exception', stage };
+          hiddenChildren = geometry?.hidden===true && Number.isInteger(geometry.count) && geometry.count===main.frames?.length;
+        }
+        const inspected = hiddenChildren ? [main] : frames;
+        const results = await Promise.all(inspected.map(async frame => {
           const detail = { stage, frameCount:frames.length, mainFrame:frame===target.webContents.mainFrame };
           if (/(?:login|signin|sign-in|signup|account|auth|checkout|payment|billing|activate)/i.test(frame.url)) throw { reason:'sensitive-frame-url', ...detail };
           const code = `(() => { const scan = root => [...root.querySelectorAll('*')].some(e =>
@@ -66,6 +88,7 @@ function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, g
           if (typeof result !== 'boolean' || result) throw { reason:typeof result === 'boolean' ? 'sensitive-input' : 'unknown-scan', ...detail };
           return false;
         }));
+        if (!sameTree()) throw { reason:'frame-exception', stage };
         return results.some(Boolean);
       };
       const sensitive = await check();
@@ -74,7 +97,7 @@ function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, g
       const image = await target.webContents.capturePage();
       stage = 'post-scan';
       const sensitiveAfter = await check();
-      if (sensitiveAfter || !valid() || session?.id!==id || target!==view) return null;
+      if (sensitiveAfter || !sameTree() || target!==view) return null;
       const resized = image.resize({width:Math.min(960,image.getSize().width)});
       let jpeg = resized.toJPEG(45);
       if (jpeg.length>60000) jpeg = image.resize({width:640}).toJPEG(30);

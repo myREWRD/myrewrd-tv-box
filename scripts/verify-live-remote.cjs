@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 const { pathToFileURL } = require('node:url');
 const { applyRemoteCommand } = require('../src/provider-remote');
+const { hiddenChildFramesCode } = require('../src/preview-frame-visibility');
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
@@ -12,13 +13,15 @@ function fixture() {
   const handlers = {}, windows = [], timers = new Set(), diagnostics = [];
   let now = 1000, response = { session: { id: 'fixture-session', offer: { type: 'offer', sdp: 'fixture' }, lease_ms: 8000 } };
   let fetchOverride, scans = 0, captures = 0, scan = () => false, marker = () => Promise.resolve(), allowed = true;
+  let geometry = () => ({hidden:false,count:0});
   const contents = new EventEmitter();
   const events = [];
   const mainFrame = { url: 'https://tv.youtube.com/watch' };
   mainFrame.framesInSubtree = [mainFrame];
+  Object.defineProperty(mainFrame,'frames',{get:()=>mainFrame.framesInSubtree.slice(1)});
   Object.assign(contents, { mainFrame, isDestroyed: () => false, isLoading: () => false,
     getURL: () => mainFrame.url, focus() {}, sendInputEvent: e => events.push(e),
-    executeJavaScriptInIsolatedWorld: async (world, scripts) => world === 1001 ? marker() : scan(++scans, scripts[0].code),
+    executeJavaScriptInIsolatedWorld: async (world, scripts) => world === 1001 ? marker() : scripts[0].code===hiddenChildFramesCode ? geometry() : scan(++scans, scripts[0].code),
     capturePage: async () => { captures++; return { getSize: () => ({ width: 1920 }), resize: () => ({ toJPEG: () => Buffer.from('jpeg') }) }; },
   });
   let view = { webContents: contents, getBounds: () => ({ width: 1920, height: 1080 }) };
@@ -30,7 +33,7 @@ function fixture() {
   }
   const source = fs.readFileSync(path.join(__dirname, '../src/live-remote.js'), 'utf8');
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'),
-    require: name => name === 'perf_hooks' ? { performance: { now: () => now } } : name === './provider-remote' ? require('../src/provider-remote') : require(name),
+    require: name => name === 'perf_hooks' ? { performance: { now: () => now } } : name === './provider-remote' ? require('../src/provider-remote') : name === './preview-frame-visibility' ? {hiddenChildFramesCode} : require(name),
     URL, AbortSignal, Buffer, setInterval: fn => { timers.add(fn); return fn; }, clearInterval: fn => timers.delete(fn),
   };
   vm.runInNewContext(source, context);
@@ -47,6 +50,7 @@ function fixture() {
     scan: fn => { scan = fn; }, marker: fn => { marker = fn; }, fetch: fn => { fetchOverride = fn; },
     advance: value => { now += value; }, captures: () => captures,
     replaceView: () => { view = { ...view }; },
+    geometry: fn => { geometry=fn; },
   };
 }
 
@@ -107,6 +111,30 @@ async function run(name, test) {
     await b.remote.tick();
     b.mainFrame.framesInSubtree.push({ url: 'https://fixture.example/form', executeJavaScript: async () => true });
     assert.equal(await b.invoke('tv-live-frame'), null); assert.equal(b.captures(), 0);
+  });
+  await run('proven zero-area child avoids script-disabled inspection', async b => {
+    await b.remote.tick();
+    b.mainFrame.framesInSubtree.push({url:'about:blank',executeJavaScript:async()=>{throw Error('scripts disabled');}});
+    b.geometry(()=>({hidden:true,count:1}));
+    assert.equal((await b.invoke('tv-live-frame')).toString(),'jpeg');
+  });
+  await run('positive-area or unmatched child remains fail-closed', async b => {
+    await b.remote.tick();
+    b.mainFrame.framesInSubtree.push({url:'about:blank',executeJavaScript:async()=>{throw Error('scripts disabled');}});
+    b.geometry(()=>({hidden:false,count:1}));
+    assert.equal(await b.invoke('tv-live-frame'),null); assert.equal(b.captures(),0);
+  });
+  await run('hidden child becoming visible after capture suppresses image', async b => {
+    await b.remote.tick(); let calls=0;
+    b.mainFrame.framesInSubtree.push({url:'about:blank',executeJavaScript:async()=>true});
+    b.geometry(()=>({hidden:++calls===1,count:1}));
+    assert.equal(await b.invoke('tv-live-frame'),null); assert.equal(b.captures(),1);
+  });
+  await run('frame replacement during geometry scan suppresses capture', async b => {
+    await b.remote.tick();
+    b.mainFrame.framesInSubtree.push({url:'about:blank',executeJavaScript:async()=>false});
+    b.geometry(()=>{b.mainFrame.framesInSubtree=[b.mainFrame,{url:'about:blank',executeJavaScript:async()=>true}];return {hidden:true,count:1};});
+    assert.equal(await b.invoke('tv-live-frame'),null); assert.equal(b.captures(),0);
   });
   await run('credential appearing after capture suppresses frame', async b => {
     await b.remote.tick(); b.scan(n => n === 2);
