@@ -76,3 +76,7 @@ After an approved release, download through the actual public updater/installer 
 ## Documentation maintenance
 
 Update this repository and the dashboard TV/operations documentation for command, pairing, token, mode, release, updater, or hardware assumptions. Record reasoning and rejected alternatives in the dashboard Knowledge Pack. Run relevant Knowledge Pack/documentation checks before completion.
+
+## 2026-09-18 live remote transport
+
+The legacy command channel remains HTTP polling. TV Box 2.3.0 adds separate ephemeral WebRTC data channels for provider-only preview and live pointer input; authenticated HTTPS carries signaling and bounded leases. No WebSocket service or desktop remote is added. Read the canonical TV_LIVE_REMOTE.md contract before changing capture, signaling, input or privacy.

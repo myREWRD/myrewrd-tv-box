@@ -55,6 +55,8 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       if (name === './presentation') return require('../src/presentation');
       if (name === './presentation-key') return require('../src/presentation-key');
       if (name === './enrollment') return require('../src/enrollment');
+      if (name === './live-remote') return { createLiveRemote: () => ({ tick: async () => {}, stop() {}, dispose() {} }) };
+      if (name === './game-day-url') return require('../src/game-day-url');
       if (name === './remote-status') return { createRemoteStatus: () => ({ tick: async () => {}, stop() {} }) };
       if (name === './provider-remote') return { createProviderRemote: () => ({ tick: async () => {}, stop() {}, resume() {} }), applyRemoteCommand: require('../src/provider-remote').applyRemoteCommand };
       if (name === './protected-playback') return { createProtectedPlayback: opts => require('../src/protected-playback').createProtectedPlayback({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };

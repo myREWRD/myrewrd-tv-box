@@ -13,6 +13,8 @@ const { loadPresentationKey, ensurePresentationKey } = require("./presentation-k
 const { createEnrollment } = require("./enrollment");
 const { createRemoteStatus } = require("./remote-status");
 const { createProviderRemote, applyRemoteCommand } = require("./provider-remote");
+const { createLiveRemote } = require("./live-remote");
+const { gameDayUrl } = require("./game-day-url");
 const { createProtectedPlayback } = require("./protected-playback");
 const protectedPlayback = createProtectedPlayback({ components });
 
@@ -23,7 +25,8 @@ app.on("second-instance", () => { if (mainWindow) restoreBoard(); });
 
 function navigate(contents, url) {
   if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
-  contents.loadURL(url).catch(() => {});
+  const options = /^https:\/\/www\.youtube\.com\/embed\//.test(url) ? {httpReferrer:API_BASE} : {};
+  contents.loadURL(url, options).catch(() => {});
 }
 
 function guardNavigation(contents) {
@@ -99,7 +102,16 @@ const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () =>
   }),
 });
 
+const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
+  getToken:()=>config.tvToken, getKey:()=>presentationKey, getView:()=>streamView,
+  canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating),
+  apply:(command, liveCurrent)=>applyRemoteCommand(command,{getView:()=>streamView,
+    canControl:()=>liveCurrent() && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating,
+    openProvider:url=>loadGameDayStream(url),focus:()=>mainWindow?.focus()})
+});
+
 function restoreBoard() {
+  liveRemote.stop();
   providerRemote.stop();
   if (handoffRequested || (updateCandidate && !updateCandidate.active)) return;
   for (const window of providerWindows) if (!window.isDestroyed()) window.close();
@@ -221,6 +233,7 @@ function createMainWindow() {
 
 // ─── Mode Switching ─────────────────────────────────────────────────────────
 function switchMode(mode, options = {}) {
+  liveRemote.stop();
   if (updateCandidate && !updateCandidate.active && mode !== "regular") return;
   recovery.cancel();
   currentMode = mode;
@@ -323,6 +336,7 @@ function startGameDayMode(options = {}) {
 }
 
 async function loadGameDayStream(url) {
+  url = gameDayUrl(url);
   if (!streamView || !allowedNavigation(url, API_BASE, config.tvToken)) return;
   const view = streamView;
   const request = ++streamRequest;
@@ -599,7 +613,8 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
-      providerRemote.stop();
+      liveRemote.stop();
+  providerRemote.stop();
       remoteStatus.stop();
       enrollment.stop();
       presentation.stop();
@@ -651,7 +666,8 @@ app.whenReady().then(() => {
   powerMonitor.on("resume", () => recovery.schedule());
   powerMonitor.on("unlock-screen", () => recovery.schedule());
   powerMonitor.on("suspend", () => {
-    providerRemote.stop();
+    liveRemote.stop();
+  providerRemote.stop();
     remoteStatus.stop();
     recovery.cancel();
     if (pollController) pollController.abort();
@@ -664,6 +680,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  liveRemote.stop();
   providerRemote.stop();
   streamRequest++;
   clearTimeout(streamRetry);
