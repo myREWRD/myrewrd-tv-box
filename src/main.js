@@ -103,6 +103,7 @@ const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () =>
 });
 
 const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
+  diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'live-remote-status.json'),JSON.stringify(record)),
   getToken:()=>config.tvToken, getKey:()=>presentationKey, getView:()=>streamView,
   canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating),
   apply:(command, liveCurrent)=>applyRemoteCommand(command,{getView:()=>streamView,

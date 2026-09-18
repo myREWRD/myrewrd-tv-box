@@ -6,14 +6,22 @@ function previewPage(url) {
   if (!providerPage(url)) return false;
   return !/(?:login|signin|sign-in|signup|sign-up|account|auth|checkout|payment|billing|activate)/i.test(new URL(url).pathname);
 }
-function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, getView, canControl, apply, fetcher = (...args) => fetch(...args) }) {
+function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, getView, canControl, apply, diagnose = () => {}, fetcher = (...args) => fetch(...args) }) {
   let window = null, session = null, lease = 0, polling = false, view = null, blocked = null, generation = 0;
   let capturing = false, lastCapture = 0, sequence = -1, count = 0, bucket = 0, applying = false;
   const file = path.join(__dirname,'pages','live-remote.html');
   const valid = () => Boolean(session && performance.now()<lease && canControl() && view===getView() && view && !view.webContents.isDestroyed() && previewPage(view.webContents.getURL()));
-  function navigation(_event,_url,_inPlace,isMainFrame) { if (isMainFrame !== false) stop(); }
-  function inPage(_event,_url,isMainFrame) { if (isMainFrame !== false) stop(); }
-  function stop() {
+  function navigation(_event,_url,_inPlace,isMainFrame) { if (isMainFrame !== false) stop('navigation'); }
+  function inPage(_event,_url,isMainFrame) { if (isMainFrame !== false) stop('navigation'); }
+  function stop(reason = 'stopped', detail = {}) {
+    if (session) {
+      const reasons = ['stopped','navigation','lease-expired','view-unavailable','frame-limit','sensitive-frame-url','sensitive-input','unknown-scan','frame-exception','capture-failed'];
+      const record = { reason: reasons.includes(reason) ? reason : 'stopped', at: new Date().toISOString() };
+      if (['pre-scan','capture','post-scan'].includes(detail.stage)) record.stage = detail.stage;
+      if (Number.isInteger(detail.frameCount)) record.frameCount = Math.min(10000,Math.max(0,detail.frameCount));
+      if (typeof detail.mainFrame === 'boolean') record.mainFrame = detail.mainFrame;
+      try { diagnose(record); } catch { /* Diagnostics cannot change the security boundary. */ }
+    }
     generation++;
     if (session) blocked = session.id;
     session = null; lease = 0;
@@ -38,33 +46,40 @@ function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, g
     if (!trusted(event) || capturing || performance.now()-lastCapture<120) return null;
     capturing = true; lastCapture = performance.now();
     const target = view, id = session.id;
+    let stage = 'pre-scan';
     try {
       // Check every frame and open shadow root. Only a boolean crosses this boundary.
       // Account names/menus may be visible in provider previews; no credential values are read.
       const check = async () => {
         const frames = target.webContents.mainFrame.framesInSubtree;
-        if (frames.length > 50) return true;
+        if (frames.length > 50) throw { reason:'frame-limit', stage, frameCount:frames.length };
         const results = await Promise.all(frames.map(async frame => {
-          if (/(?:login|signin|sign-in|signup|account|auth|checkout|payment|billing|activate)/i.test(frame.url)) return true;
+          const detail = { stage, frameCount:frames.length, mainFrame:frame===target.webContents.mainFrame };
+          if (/(?:login|signin|sign-in|signup|account|auth|checkout|payment|billing|activate)/i.test(frame.url)) throw { reason:'sensitive-frame-url', ...detail };
           const code = `(() => { const scan = root => [...root.querySelectorAll('*')].some(e =>
             (e.matches('input[type=password],input[type=email],input[autocomplete=username],input[autocomplete=one-time-code]') && e.getClientRects().length > 0)
             || (e.shadowRoot && scan(e.shadowRoot))); return scan(document); })()`;
-          const result = frame === target.webContents.mainFrame
-            ? await target.webContents.executeJavaScriptInIsolatedWorld(1002,[{code}]) : await frame.executeJavaScript(code);
-          return typeof result !== 'boolean' || result;
+          let result;
+          try { result = frame === target.webContents.mainFrame
+            ? await target.webContents.executeJavaScriptInIsolatedWorld(1002,[{code}]) : await frame.executeJavaScript(code); }
+          catch { throw { reason:'frame-exception', ...detail }; }
+          if (typeof result !== 'boolean' || result) throw { reason:typeof result === 'boolean' ? 'sensitive-input' : 'unknown-scan', ...detail };
+          return false;
         }));
         return results.some(Boolean);
       };
       const sensitive = await check();
       if (sensitive || !valid() || session?.id!==id) { stop(); return null; }
+      stage = 'capture';
       const image = await target.webContents.capturePage();
+      stage = 'post-scan';
       const sensitiveAfter = await check();
       if (sensitiveAfter || !valid() || session?.id!==id || target!==view) return null;
       const resized = image.resize({width:Math.min(960,image.getSize().width)});
       let jpeg = resized.toJPEG(45);
       if (jpeg.length>60000) jpeg = image.resize({width:640}).toJPEG(30);
       return jpeg.length<=60000 ? jpeg : null;
-    } catch { stop(); return null; }
+    } catch (error) { stop(error?.reason || 'capture-failed', { ...error, stage }); return null; }
     finally { capturing = false; }
   });
   ipcMain.handle('tv-live-input', async (event, envelope) => {
@@ -103,7 +118,7 @@ function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, g
     } catch { /* The local watchdog expires the last successful lease. */ }
     finally { polling=false; }
   }
-  const watchdog=setInterval(()=>{if (session && !valid()) stop();},100);
+  const watchdog=setInterval(()=>{if (session && !valid()) stop(performance.now()>=lease ? 'lease-expired' : 'view-unavailable');},100);
   const timer=setInterval(tick,3000);
   return {tick,stop,dispose(){clearInterval(timer);clearInterval(watchdog);stop();}};
 }

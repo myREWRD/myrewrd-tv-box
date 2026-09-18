@@ -9,7 +9,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 
 function fixture() {
-  const handlers = {}, windows = [], timers = new Set();
+  const handlers = {}, windows = [], timers = new Set(), diagnostics = [];
   let now = 1000, response = { session: { id: 'fixture-session', offer: { type: 'offer', sdp: 'fixture' }, lease_ms: 8000 } };
   let fetchOverride, scans = 0, captures = 0, scan = () => false, marker = () => Promise.resolve(), allowed = true;
   const contents = new EventEmitter();
@@ -37,11 +37,12 @@ function fixture() {
   const remote = context.module.exports.createLiveRemote({ BrowserWindow: Window,
     ipcMain: { handle: (name, fn) => { handlers[name] = fn; } }, apiBase: 'https://fixture.example',
     getToken: () => 'fixture-token', getKey: () => 'fixture-key', getView: () => view, canControl: () => allowed,
+    diagnose: record => diagnostics.push(record),
     apply: (command, current) => applyRemoteCommand(command, { getView: () => view, canControl: () => current() && allowed, focus() {}, openProvider() {} }),
     fetcher: async () => fetchOverride ? fetchOverride() : { ok: true, json: async () => response },
   });
   const event = () => ({ sender: windows.at(-1).webContents, senderFrame: windows.at(-1).webContents.mainFrame });
-  return { remote, handlers, windows, contents, mainFrame, events, event,
+  return { remote, handlers, windows, contents, mainFrame, events, event, diagnostics,
     invoke: (name, ...args) => handlers[name](event(), ...args),
     scan: fn => { scan = fn; }, marker: fn => { marker = fn; }, fetch: fn => { fetchOverride = fn; },
     advance: value => { now += value; }, captures: () => captures,
@@ -110,6 +111,24 @@ async function run(name, test) {
   await run('credential appearing after capture suppresses frame', async b => {
     await b.remote.tick(); b.scan(n => n === 2);
     assert.equal(await b.invoke('tv-live-frame'), null); assert.equal(b.captures(), 1);
+  });
+  await run('bounded diagnostics distinguish hidden frame URL without leaking it', async b => {
+    await b.remote.tick();
+    b.mainFrame.framesInSubtree.push({ url:'https://fixture.example/auth?token=secret-do-not-log' });
+    assert.equal(await b.invoke('tv-live-frame'),null);
+    assert.equal(b.diagnostics.at(-1).reason,'sensitive-frame-url');
+    assert.equal(b.diagnostics.at(-1).mainFrame,false);
+    assert.equal(b.diagnostics.at(-1).frameCount,2);
+    assert.equal(b.diagnostics.at(-1).stage,'pre-scan');
+    assert.equal(JSON.stringify(b.diagnostics).includes('secret'),false);
+    assert.deepEqual(Object.keys(b.diagnostics.at(-1)).sort(),['at','frameCount','mainFrame','reason','stage']);
+  });
+  await run('frame exceptions report enum only and remain fail-closed', async b => {
+    await b.remote.tick(); b.scan(()=>{throw Error('private provider detail');});
+    assert.equal(await b.invoke('tv-live-frame'),null);
+    assert.equal(b.diagnostics.at(-1).reason,'frame-exception');
+    assert.equal(JSON.stringify(b.diagnostics).includes('private'),false);
+    assert.equal(b.captures(),0);
   });
   await run('revocation during final privacy scan suppresses frame', async b => {
     await b.remote.tick(); const pending = deferred(); b.scan(n => n === 2 ? pending.promise : false);

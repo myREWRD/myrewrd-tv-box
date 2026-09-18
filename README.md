@@ -144,3 +144,7 @@ See [provider remote setup and release gates](docs/PROVIDER_REMOTE.md). This sou
 ## TV control 2.3.0 source contract (2026-09-18)
 
 The coordinated dashboard/app/box release restores Regular TV Board, Live Stream and Game Day. Game Day supports selected-TV Play saved URL without toggling mode. An explicit live remote uses an eight-second receiver lease, fixed 15-minute session, provider-only preview and bounded pointer input. Mobile opens a first-party browser with a one-use scoped handoff; no native dependency/runtime change. Main-page navigation ends the current connection; Start again reconnects. Protected video can appear black in previews. Same-network peer connectivity is required unless TURN is configured. Signed Windows/physical playback and fleet promotion remain separate gates. Canonical contract and validation: ssdt-dashboard/docs/product/TV_LIVE_REMOTE.md.
+
+## Live-remote diagnostics (2.3.1)
+
+The receiver overwrites one local `live-remote-status.json` in its existing AppData profile when a live session stops. It contains only fixed reason/stage enums, a timestamp, bounded frame count and main-frame boolean; no URL, credential, DOM or raw error message. A sensitive post-capture scan now ends the session immediately. Other privacy and input boundaries remain in place. This candidate diagnoses the physical Hulu preview disconnect observed on 2.3.0; it does not claim that issue is fixed. See the dashboard canonical TV_LIVE_REMOTE and release-status documents.
