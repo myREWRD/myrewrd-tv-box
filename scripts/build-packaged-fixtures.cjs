@@ -9,7 +9,7 @@ for (const version of ['1.0.5', '1.0.6']) {
   fs.cpSync(path.join(repo, 'src'), path.join(project, 'src'), { recursive: true });
   fs.copyFileSync(path.join(__dirname, 'packaged-fixture.cjs'), path.join(project, 'fixture.cjs'));
   fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'myrewrd-tv-box', version, main: 'fixture.cjs',
-    build: { appId: 'com.myrewrd.tvbox', productName: 'myREWRD TV Box', electronVersion: '30.5.1', npmRebuild: false,
+    build: { appId: 'com.myrewrd.tvbox', productName: 'myREWRD TV Box', electronVersion: '30.5.1', npmRebuild: false, asarUnpack: ['src/*.exe', 'src/*.ps1'],
       win: { target: [{ target: 'portable', arch: ['x64'] }], signAndEditExecutable: false } } }));
   execFileSync(process.execPath, [path.join(repo, 'node_modules', 'electron-builder', 'cli.js'), '--projectDir', project, '--win', 'portable', '--publish', 'never'], { stdio: 'inherit', timeout: 600000 });
 }
