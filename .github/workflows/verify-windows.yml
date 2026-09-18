@@ -34,6 +34,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-live-game-takeover.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Chromium preview privacy geometry
+        run: |
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-preview-geometry-electron.cjs' -WindowStyle Hidden -PassThru -Wait
+          $result = Get-Content ../tv-presentation-validation/preview-geometry-electron.json -Raw | ConvertFrom-Json
+          $result | ConvertTo-Json -Depth 5
+          if ($fixture.ExitCode -ne 0 -or $result.status -ne 'passed') { exit 1 }
       - name: Windows process failure recovery
         run: |
           node scripts/verify-update.cjs
