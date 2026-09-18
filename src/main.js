@@ -1,7 +1,7 @@
 // myREWRD TV Box — Main Electron Process
 // Manages: pairing, mode switching, HTTP polling control, DRM streaming, sponsor overlay, auto-update
 
-const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage, components } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { prepareUpdate, createCandidate, blockedVersion } = require("./update");
@@ -12,6 +12,8 @@ const { createPresentation } = require("./presentation");
 const { loadPresentationKey, ensurePresentationKey } = require("./presentation-key");
 const { createEnrollment } = require("./enrollment");
 const { createRemoteStatus } = require("./remote-status");
+const { createProtectedPlayback } = require("./protected-playback");
+const protectedPlayback = createProtectedPlayback({ components });
 
 // Recovery may race a completed restart if its result could not be written.
 // Only one process may own this device profile and visible board.
@@ -56,6 +58,9 @@ const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.join(app.getPath
 
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
+let streamRequest = 0;
+let streamRetry = null;
+let streamTarget = null;
 let overlayWindow = null; // Transparent overlay for sponsor bar
 let config = loadConfig();
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
@@ -141,10 +146,8 @@ function saveConfig(data) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
-// ─── Widevine DRM Support ───────────────────────────────────────────────────
-// Electron supports Widevine out of the box on most platforms.
-// This enables YouTube TV, Hulu, ESPN+, Peacock, Amazon Prime to play DRM content.
-app.commandLine.appendSwitch("enable-features", "PlatformEncryptedDolbyVision");
+// Protected playback requires the ECS runtime, component readiness and a
+// production VMP signature. Chromium feature flags do not install Widevine.
 
 // ─── Window Management ──────────────────────────────────────────────────────
 function createMainWindow() {
@@ -215,6 +218,10 @@ function switchMode(mode, options = {}) {
   console.log(`[TV Box] Switching display mode`);
 
   // Remove any existing stream view
+  streamRequest++;
+  clearTimeout(streamRetry);
+  streamRetry = null;
+  streamTarget = null;
   if (streamView) {
     mainWindow.removeBrowserView(streamView);
     streamView.webContents.destroy();
@@ -280,7 +287,8 @@ function startGameDayMode(options = {}) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      plugins: true, // Enable plugins for DRM
+      sandbox: true,
+      disableHtmlFullscreenWindowResize: true,
     },
   });
 
@@ -298,10 +306,33 @@ function startGameDayMode(options = {}) {
 
   // Load the stream URL or YouTube TV
   const streamUrl = options.streamUrl || "https://tv.youtube.com";
-  navigate(streamView.webContents, streamUrl);
+  loadGameDayStream(streamUrl);
 
   // Fetch and display sponsor data
   fetchSponsorData();
+}
+
+async function loadGameDayStream(url) {
+  if (!streamView || !allowedNavigation(url, API_BASE, config.tvToken)) return;
+  const view = streamView;
+  const request = ++streamRequest;
+  streamTarget = url;
+  boardStatus = 'connecting';
+  clearTimeout(streamRetry);
+  streamRetry = null;
+  const current = () => streamView === view && streamRequest === request && currentMode === 'gameday';
+  view.webContents.loadFile(path.join(__dirname, 'pages', 'playback-status.html')).catch(() => {});
+  try {
+    await protectedPlayback.ready();
+    if (current()) navigate(view.webContents, url);
+  } catch {
+    if (!current()) return;
+    boardStatus = 'failed';
+    // Do not log provider URLs, license responses, account data or component errors.
+    console.error('[TV Box] Protected video preparation unavailable; retry scheduled.');
+    view.webContents.loadFile(path.join(__dirname, 'pages', 'playback-status.html'), { hash: 'retry' }).catch(() => {});
+    streamRetry = setTimeout(() => { if (current()) void loadGameDayStream(url); }, 60000);
+  }
 }
 
 // ─── Sponsor Data ───────────────────────────────────────────────────────────
@@ -510,7 +541,7 @@ function handleCommand(msg) {
 
     case "set_stream_url":
       if (currentMode === "gameday" && streamView) {
-        navigate(streamView.webContents, msg.url);
+        void loadGameDayStream(msg.url);
       }
       break;
 
@@ -522,7 +553,7 @@ function handleCommand(msg) {
     case "navigate":
       // Navigate the stream view to a specific URL
       if (streamView && streamView.webContents) {
-        navigate(streamView.webContents, msg.url);
+        void loadGameDayStream(msg.url);
       } else {
         // If no stream view exists, load URL in main window
         navigate(mainWindow.webContents, msg.url);
@@ -531,7 +562,10 @@ function handleCommand(msg) {
 
     case "refresh":
       if (mainWindow) mainWindow.webContents.reload();
-      if (streamView) streamView.webContents.reload();
+      if (streamView && streamTarget) {
+        const currentUrl = streamView.webContents.getURL();
+        void loadGameDayStream(allowedNavigation(currentUrl, API_BASE, config.tvToken) ? currentUrl : streamTarget);
+      }
       break;
 
     case "volume":
@@ -616,6 +650,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  streamRequest++;
+  clearTimeout(streamRetry);
   remoteStatus.stop();
   enrollment.stop();
   presentation.stop();

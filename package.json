@@ -1,21 +1,24 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
+    "verify:protected-playback": "node scripts/verify-protected-playback.cjs",
+    "postinstall": "node node_modules/electron/install.js",
     "verify:presentation": "node scripts/verify-presentation.cjs && node scripts/verify-presentation-receiver.cjs",
     "verify:wake-recovery": "node scripts/verify-wake-recovery.cjs",
     "start": "electron .",
     "verify:gameday-sponsor-logo": "node scripts/verify-gameday-sponsor-logo.mjs",
     "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
+    "build:win": "node scripts/build-protected-windows.cjs",
     "build:linux": "electron-builder --linux",
     "verify:live-game-takeover": "node scripts/verify-live-game-takeover.mjs",
     "verify:update": "node scripts/verify-update.cjs",
-    "build:win-installed": "electron-builder --win zip"
+    "build:win-installed": "node scripts/build-protected-windows.cjs"
   },
   "build": {
+    "electronDist": "node_modules/electron/dist",
     "appId": "com.myrewrd.tvbox",
     "productName": "myREWRD TV Box",
     "directories": {
@@ -56,7 +59,8 @@
     "electron-updater": "^6.1.0"
   },
   "devDependencies": {
-    "electron": "^30.0.0",
+    "7zip-bin": "5.2.0",
+    "electron": "https://github.com/castlabs/electron-releases#v44.1.0+wvcus",
     "electron-builder": "^24.13.0"
   }
 }

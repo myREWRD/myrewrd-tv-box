@@ -9,7 +9,7 @@ const base = 'https://app.myrewrd.com';
 const token = 'tv_0123456789abcdef'; // synthetic fixture only
 const source = fs.readFileSync(path.join(__dirname, '../src/main.js'), 'utf8');
 
-function boot(saved) {
+function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenReady: async () => [] }) {
   const timers = new Map(); let nextTimer = 1;
   const files = new Map(saved ? [[path.join('/fixture', 'config.json'), JSON.stringify(saved)]] : []);
   const logs = []; const requests = []; const windows = [];
@@ -25,12 +25,12 @@ function boot(saved) {
         mainFrame: { url: '' }, send() {}, reload() {},
         setWindowOpenHandler: handler => { this.popupHandler = handler; },
         getURL: () => this.webContents.mainFrame.url,
-        destroy() {}, loadURL: (url) => this.loadURL(url),
+        destroy() {}, loadURL: (url) => this.loadURL(url), loadFile: (...args) => this.loadFile(...args),
       });
       windows.push(this);
     }
     loadURL(url) { this.urls.push(url); this.webContents.mainFrame.url = url; return Promise.resolve(); }
-    loadFile() { return Promise.resolve(); }
+    loadFile(file, options) { this.lastFile = { file, options }; return Promise.resolve(); }
     isDestroyed() { return this.destroyed; }
     isMinimized() { return false; }
     show() {} restore() {} setKiosk(v) { this.kiosk = v; }
@@ -43,7 +43,7 @@ function boot(saved) {
   const powerMonitor = new EventEmitter();
   const context = vm.createContext({
     require(name) {
-      if (name === 'electron') return { app, BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1920, height: 1080 } }) } };
+      if (name === 'electron') return { app, components, BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1920, height: 1080 } }) } };
       if (name === 'fs') return {
         existsSync: p => files.has(p), readFileSync: p => files.get(p),
         mkdirSync() {}, writeFileSync: (p, data) => files.set(p, data),
@@ -56,6 +56,7 @@ function boot(saved) {
       if (name === './presentation-key') return require('../src/presentation-key');
       if (name === './enrollment') return require('../src/enrollment');
       if (name === './remote-status') return { createRemoteStatus: () => ({ tick: async () => {}, stop() {} }) };
+      if (name === './protected-playback') return { createProtectedPlayback: opts => require('../src/protected-playback').createProtectedPlayback({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,
@@ -73,9 +74,10 @@ function boot(saved) {
     fire(delay) { for (const [id, t] of [...timers]) if (!t.interval && t.delay === delay) { timers.delete(id); t.fn(); } },
   };
 }
-const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+module.exports = { boot, settle };
 
-(async () => {
+if (require.main === module) (async () => {
   for (const value of ['javascript:alert(1)', 'file:///C:/Windows/win.ini', 'http://youtube.com', 'https://youtube.com.evil.example', 'https://user:secret@youtube.com', `${base}/dashboard`, 'https://127.0.0.1']) {
     assert.equal(allowedNavigation(value, base, token), false);
   }
