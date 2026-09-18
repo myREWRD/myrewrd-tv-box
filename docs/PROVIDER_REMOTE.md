@@ -8,4 +8,6 @@ Commands expire, are claimed once and are not replayed after a lost response. Ap
 
 Run `node scripts/verify-provider-remote.cjs` for input/worker cases, plus existing protected-playback, wake-recovery and takeover regressions. `scripts/verify-provider-remote-electron.cjs` is an attended synthetic Windows input fixture; it intercepts HTTPS locally and never accesses provider accounts. It requires a focused interactive desktop.
 
+[VERIFIED LOCAL 2026-09-18] Candidate version is 2.2.0, avoiding reuse of the unpublished updater-only 2.1.1 version. Actual Chromium click, Shift+Tab and isolated pointer marker passed. Hidden launchers can leave the test's child renderer hidden despite parent focus; the fixture now verifies renderer visibility and restores only its synthetic window if necessary. No production input workaround was needed. Dashboard controls use the same protocol; provider credentials still stay on the box. Physical provider playback and phone-to-box delivery are not implied by synthetic acceptance.
+
 Canonical setup, security, compatibility and release evidence: dashboard `docs/product/TV_PROVIDER_REMOTE.md` and ADR 0018. No production remote rollout is implied by this source change.

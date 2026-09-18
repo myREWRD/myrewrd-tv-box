@@ -27,6 +27,14 @@ app.whenReady().then(async()=>{
   await new Promise(r=>setTimeout(r,1000));
   // Windows may consume the launcher's initial SW_HIDE on the first ShowWindow.
   if (!win.isVisible()) { win.hide(); win.show(); win.focus(); view.webContents.focus(); await new Promise(r=>setTimeout(r,300)); }
+  // A hidden Windows launcher can leave the child compositor hidden even when
+  // the parent reports visible/focused. Recover only this synthetic test window.
+  if (await view.webContents.executeJavaScript('document.visibilityState') === 'hidden') {
+    win.minimize(); await new Promise(r=>setTimeout(r,300));
+    win.restore(); win.focus(); view.webContents.focus();
+    await new Promise(r=>setTimeout(r,500));
+  }
+  assert.equal(await view.webContents.executeJavaScript('document.visibilityState'), 'visible', 'input fixture must have a rendered child surface');
   const context={getView:()=>view,canControl:()=>true,openProvider:async()=>{},focus:()=>win.focus()};
   const state={url:view.webContents.getURL(),loading:view.webContents.isLoading(),focused:win.isFocused(),viewFocused:view.webContents.isFocused(),bounds:view.getBounds()};
   assert.equal(await applyRemoteCommand({type:'point',x:0.3,y:0.2857,click:true},context),'applied',JSON.stringify(state));
