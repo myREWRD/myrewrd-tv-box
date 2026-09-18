@@ -1,5 +1,7 @@
 # Venue app remote candidate
 
+[VERIFIED HARDWARE 2026-09-18] The attended bridge's first execution downloaded/verified the signed 2.2.0 ZIP but PowerShell returned early from the GUI executable. The supervisor subsequently reported `parent-retained`; 2.1.0 stayed running. The support script now waits for the direct bridge process only, then validates live supervisor readiness before handoff. `Start-Process -Wait` must not be used because it waits for the supervisor tree too. An optional installation-local archive avoids repeating the download; its pinned SHA256 is still checked before extraction. This support-script repair does not change the signed runtime ZIP or fleet offer.
+
 Protocol 1 adds a restricted provider remote to Game Day. It depends on dashboard `/api/tv-remote` and its private command-table migration, plus the existing physically enrolled presentation key. Ordinary TV tokens alone are insufficient. The venue app chooses one device; existing venue-wide modes and legacy commands remain compatible.
 
 Only fixed provider launch targets, navigation keys, normalized pointer/click, scrolling, back/reload and mute are accepted. No arbitrary text, URL, script, desktop input, screenshot or provider cookie is transmitted. Controls are disabled during presentation, update and provider authentication popups. Provider sign-in is performed directly on the box; no Google account is required for myREWRD app control.

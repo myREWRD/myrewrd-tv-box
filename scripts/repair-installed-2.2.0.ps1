@@ -1,5 +1,6 @@
 # Attended bridge for the pre-original-fs updater. Uses the signed candidate's
 # existing A/B supervisor; never edits a running ASAR or provider profile.
+param([string]$ArchivePath)
 $ErrorActionPreference = 'Stop'
 $env:PSModulePath = "$PSHOME\Modules"
 $root = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE 'myREWRD-TV-Box'))
@@ -26,7 +27,13 @@ $stage = Join-Path $root ('.support-2.2.0-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage | Out-Null
 $archive = Join-Path $stage 'runtime.zip'
 $hash = 'f5482aa63a05477793205c518d6ad79a4c0da1d7d86d0df0b34554669dc592dc'
-Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/myREWRD/myrewrd-tv-box/releases/download/latest/myREWRD.TV.Box.2.2.0.zip' -OutFile $archive
+if ($ArchivePath) {
+  $cached = [IO.Path]::GetFullPath($ArchivePath)
+  if (!$cached.StartsWith($root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Cached archive must be inside the installation directory' }
+  Copy-Item -LiteralPath $cached -Destination $archive
+} else {
+  Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/myREWRD/myrewrd-tv-box/releases/download/latest/myREWRD.TV.Box.2.2.0.zip' -OutFile $archive
+}
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash) { throw 'Signed candidate checksum mismatch' }
 $payload = Join-Path $stage 'payload'
 Expand-Archive -LiteralPath $archive -DestinationPath $payload
@@ -42,7 +49,14 @@ prepareUpdate({...input,download:async(_,file)=>fs.copyFileSync(input.archive,fi
  .catch(()=>{console.error('Recovery staging failed; current TV retained.');process.exitCode=1;});
 '@ | Set-Content -LiteralPath (Join-Path $stage 'bridge.cjs') -Encoding UTF8
 $env:ELECTRON_RUN_AS_NODE = '1'
-try { & (Join-Path $payload 'myREWRD TV Box.exe') (Join-Path $stage 'bridge.cjs'); $bridgeExit=$LASTEXITCODE }
+try {
+  $bridgeProcess = Start-Process -FilePath (Join-Path $payload 'myREWRD TV Box.exe') -ArgumentList ('"' + (Join-Path $stage 'bridge.cjs') + '"') -WindowStyle Hidden -PassThru
+  # PowerShell does not wait for GUI executables invoked with &. Wait only for
+  # this bridge process: Start-Process -Wait also waits for the supervisor tree,
+  # which needs this script to stop the old TV after confirming readiness.
+  if (!$bridgeProcess.WaitForExit(180000)) { throw 'Bridge preparation timed out; TV retained' }
+  $bridgeExit = $bridgeProcess.ExitCode
+}
 finally { Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue }
 if ($bridgeExit -ne 0 -or !(Test-Path -LiteralPath (Join-Path $stage 'job.json'))) { throw 'No supervised handoff prepared; TV retained' }
 $job = Get-Content -LiteralPath (Join-Path $stage 'job.json') -Raw | ConvertFrom-Json
