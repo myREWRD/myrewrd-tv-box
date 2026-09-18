@@ -10,7 +10,7 @@ while ($ancestor) {
   $ancestor = $ancestor.Parent
 }
 $startup = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\myREWRD-TV-Box.bat'
-$profile = Join-Path $env:APPDATA 'myREWRD TV Box'
+$profile = Join-Path $env:APPDATA 'myrewrd-tv-box'
 if (!(Test-Path -LiteralPath (Join-Path $profile 'config.json'))) { throw 'Existing paired profile required' }
 $startupText = Get-Content -LiteralPath $startup -Raw
 if ($startupText -notmatch '(?im)^\s*start\s+""\s+"([^"]+)"\s*$') { throw 'Unrecognized startup entry' }
@@ -43,6 +43,11 @@ $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'input.j
 const fs = require('original-fs'), path = require('node:path');
 delete process.env.ELECTRON_RUN_AS_NODE;
 const input = JSON.parse(fs.readFileSync(path.join(__dirname,'input.json'),'utf8').replace(/^\uFEFF/,''));
+// Electron uses root package productName/name, not electron-builder's display
+// name. Validate before preparing a supervisor or stopping the running TV.
+const packaged = require(path.join(input.payload,'resources','app.asar','package.json'));
+const expectedProfile = path.join(process.env.APPDATA, packaged.productName || packaged.name);
+if (input.profile !== expectedProfile) throw Error('Installed Electron profile mismatch; current TV retained.');
 const { prepareUpdate } = require(path.join(input.payload,'resources','app.asar','src','update.js'));
 prepareUpdate({...input,download:async(_,file)=>fs.copyFileSync(input.archive,file)})
  .then(job=>fs.writeFileSync(path.join(__dirname,'job.json'),JSON.stringify({directory:job.directory,nonce:job.nonce,version:job.version,supervisorPid:job.supervisorPid})))
