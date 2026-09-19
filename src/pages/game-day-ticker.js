@@ -6,7 +6,7 @@ function applyTicker(messages) {
   if (signature === tickerSignature) return;
   tickerSignature = signature;
   tickerObservers.splice(0).forEach(observer => observer.disconnect());
-  for (const id of ["tickerLeft", "tickerRight"]) {
+  for (const id of ["ticker"]) {
     const lane = document.getElementById(id);
     lane.replaceChildren();
     if (!messages.length) continue;

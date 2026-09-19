@@ -1,5 +1,11 @@
 # myREWRD TV Box
 
+[DIAGNOSED; FIX ACCEPTANCE PENDING 2026-09-19] Physical TV network diagnostics show Hulu returns HTTP 302 to the exact Adobe Pass `/adobe-services/oauth2` callback, which 2.3.6 rejects. Candidate 2.3.7 permits that exact HTTPS production-host path only with one bounded nonempty code and state parameter. No auth values are retained or logged. Missing/duplicate fields, child hosts and sibling paths remain rejected. End-to-end provider login acceptance remains pending.
+
+## 2.3.7 sponsor-strip correction (candidate)
+
+Restores the sponsorship label, logo and name to one line with a single full-width ticker behind a feathered center panel. Provider geometry stays 94% / 6%. The immutable signed 2.3.6 test release is installed on the test TV; ESPN/Hulu sign-in remains unresolved. This candidate is not yet released or installed.
+
 ## Game Day protected playback candidate (2.1.0)
 
 The Windows candidate uses CastLabs ECS with runtime Widevine initialization and explicit production VMP signing. It retains the Game Day sponsor strip, remote controls and existing sessions. Development builds are not proof of YouTube TV playback. See [protected playback implementation and acceptance](docs/PROTECTED_PLAYBACK.md) before building or releasing. Provider playback, signing-account setup and physical Windows update acceptance remain pending; no production rollout is included.
