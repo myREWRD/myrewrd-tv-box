@@ -25,7 +25,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
         mainFrame: { url: '' }, send() {}, reload() {},
         setWindowOpenHandler: handler => { this.popupHandler = handler; },
         getURL: () => this.webContents.mainFrame.url,
-        destroy() {}, loadURL: (url) => this.loadURL(url), loadFile: (...args) => this.loadFile(...args),
+        isDestroyed:()=>this.destroyed, destroy:()=>{this.destroyed=true;}, loadURL: (url) => this.loadURL(url), loadFile: (...args) => this.loadFile(...args),
       });
       windows.push(this);
     }
@@ -57,6 +57,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       if (name === './enrollment') return require('../src/enrollment');
       if (name === './live-remote') return { createLiveRemote: () => ({ tick: async () => {}, stop() {}, dispose() {} }) };
       if (name === './game-day-url') return require('../src/game-day-url');
+      if (name === './game-day-provider') return require('../src/game-day-provider');
       if (name === './remote-status') return { createRemoteStatus: () => ({ tick: async () => {}, stop() {} }) };
       if (name === './provider-remote') return { createProviderRemote: () => ({ tick: async () => {}, stop() {}, resume() {} }), applyRemoteCommand: require('../src/provider-remote').applyRemoteCommand };
       if (name === './protected-playback') return { createProtectedPlayback: opts => require('../src/protected-playback').createProtectedPlayback({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
@@ -170,11 +171,21 @@ if (require.main === module) (async () => {
   fresh.fire(15000); await settle();
   assert.equal(fresh.run('currentMode'), 'gameday');
   assert.notEqual(fresh.run('streamView'), oldStream);
-  assert.equal(fresh.run('streamView').urls.at(-1), 'https://tv.youtube.com');
+  assert.equal(fresh.run('streamView').urls.at(-1), 'https://tv.youtube.com/');
+  await fresh.run('openGameDayProvider("hulu")'); await settle();
+  fresh.run('streamView.webContents.mainFrame.url="https://www.hulu.com/watch/channel-fixture?secret=discard"');
+  fresh.run('switchMode("regular")'); await settle();
+  fresh.run('switchMode("gameday", {streamUrl:"https://www.youtube.com/watch?v=obsolete"})'); await settle();
+  assert.equal(fresh.run('streamView').urls.at(-1),'https://www.hulu.com/watch/channel-fixture');
   active = true; await fresh.run('pollForCommands()'); await settle();
   assert.equal(fresh.run('currentMode'), 'live-game');
   active = false; await fresh.run('pollForCommands()'); await settle();
   assert.equal(fresh.run('currentMode'), 'gameday');
+
+  assert.equal(fresh.run('streamView').urls.at(-1),'https://www.hulu.com/watch/channel-fixture','Live Games takeover returns to provider channel');
+  const providerConfig=JSON.parse(fresh.files.get(path.join('/fixture','config.json')));
+  assert.equal(providerConfig.gameDayProvider,'hulu');
+  assert.equal(JSON.stringify(providerConfig).includes('channel-fixture'),false,'provider browsing never persisted');
 
   // Unpair invalidates in-flight work and pending recovery; wake never resurrects it.
   paired.run('handleCommand({ type: "unpair" })'); await settle();

@@ -11,12 +11,11 @@ function providerPage(value) {
 async function applyRemoteCommand(command, { getView, canControl, openProvider, focus }) {
   if (!canControl() || !command || typeof command !== 'object') return 'unavailable';
   if (command.type === 'saved_url') {
-    if (typeof command.url !== 'string' || !require('./navigation').allowedNavigation(command.url, 'https://app.myrewrd.com', null)) return 'unavailable';
-    await openProvider(command.url); return 'applied';
+    return 'unavailable'; // Game Day is provider-only; URL playback belongs to Live Stream.
   }
   if (command.type === 'provider') {
     if (!Object.hasOwn(PROVIDERS, command.provider)) return 'unavailable';
-    await openProvider(PROVIDERS[command.provider]); return 'applied';
+    await openProvider(PROVIDERS[command.provider],command.provider); return 'applied';
   }
   const view = getView();
   const contents = view?.webContents;

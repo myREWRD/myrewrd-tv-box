@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { createProtectedPlayback } = require('../src/protected-playback');
 const { boot, settle } = require('./verify-wake-recovery.cjs');
 const saved = { paired: true, tvToken: 'tv_0123456789abcdef' };
-const url = 'https://tv.youtube.com/live';
+const url = 'https://tv.youtube.com/';
 
 (async () => {
   await assert.rejects(createProtectedPlayback({}).ready(), /runtime unavailable/);
@@ -20,15 +20,15 @@ const url = 'https://tv.youtube.com/live';
   assert.equal(view.options.webPreferences.nodeIntegration, false);
   assert.equal(view.options.webPreferences.preload, undefined, 'provider has no device preload');
   assert.equal(view.options.webPreferences.disableHtmlFullscreenWindowResize, true);
-  box.run("handleCommand({type: 'set_stream_url', url: 'https://tv.youtube.com/new'})"); await settle();
+  box.run("openGameDayProvider('hulu')"); await settle();
   finish([]); await settle();
   assert.equal(calls, 1, 'concurrent requests share component initialization');
-  assert.deepEqual(view.urls, ['https://tv.youtube.com/new'], 'stale URL cannot win');
+  assert.deepEqual(view.urls, ['https://www.hulu.com/'], 'stale URL cannot win');
   box.run("handleCommand({type: 'navigate', url: 'https://evil.example'})"); await settle();
-  assert.deepEqual(view.urls, ['https://tv.youtube.com/new'], 'navigation allowlist preserved');
-  view.webContents.mainFrame.url = 'https://tv.youtube.com/watch/selected-game';
+  assert.deepEqual(view.urls, ['https://www.hulu.com/'], 'navigation allowlist preserved');
+  view.webContents.mainFrame.url = 'https://www.hulu.com/watch/selected-game';
   box.run("handleCommand({type: 'refresh'})"); await settle();
-  assert.equal(view.urls.at(-1), 'https://tv.youtube.com/watch/selected-game', 'refresh preserves selected channel');
+  assert.equal(view.urls.at(-1), 'https://www.hulu.com/watch/selected-game', 'refresh preserves selected channel');
 
   for (const mode of ['regular', 'live-game']) {
     let resolve;
