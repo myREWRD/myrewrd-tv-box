@@ -1,0 +1,31 @@
+const assert=require('node:assert/strict');
+const vm=require('node:vm');
+const {createProviderFullscreen,enterPlayerFullscreen}=require('../src/provider-fullscreen');
+(async()=>{
+ let url='https://www.espn.com/watch/player/_/id/game',available=true,loading=false,calls=[];
+ const contents={isDestroyed:()=>false,isLoading:()=>loading,getURL:()=>url,executeJavaScriptInIsolatedWorld:async(...args)=>calls.push(args)};
+ const controller=createProviderFullscreen({getView:()=>({webContents:contents}),getProvider:()=> 'espn',canExpand:()=>available});
+ for(const bad of ['https://www.espn.com/watch/','https://auth.hulu.com/oauth2/login','https://www.espn.com/account','https://evil.example/watch/player/_/id/game']){url=bad;await controller.tick();}
+ assert.equal(calls.length,0);
+ url='https://www.espn.com/watch/player/_/id/game';loading=true;await controller.tick();loading=false;available=false;await controller.tick();available=true;assert.equal(calls.length,0);
+ await controller.tick();assert.equal(calls.length,1);assert.equal(calls[0][0],1004);assert.equal(calls[0][2],true);
+ let full=0,paused=false,sensitive=false,fail=false,buttonClicks=0;
+ const listeners=new Set();const dispatch=()=>[...listeners].forEach(fn=>fn());
+ const document={body:{},documentElement:{},fullscreenElement:null,addEventListener:(name,fn)=>listeners.add(fn),removeEventListener:(name,fn)=>listeners.delete(fn)};
+ const target={contains:()=>true,requestFullscreen:async()=>{full++;if(fail)throw Error('unsupported');document.fullscreenElement=video;dispatch();}};
+ const video={get paused(){return paused},ended:false,readyState:4,clientWidth:800,clientHeight:450,getBoundingClientRect:()=>({width:800,height:450}),parentElement:target,controls:false,requestFullscreen:target.requestFullscreen};
+ document.querySelectorAll=selector=>selector.startsWith('input')?(sensitive?[{getClientRects:()=>[{}]}]:[]):selector==='video'?[video]:[];
+ const context=vm.createContext({document,location:{origin:'https://www.espn.com',pathname:'/watch/player/_/id/game'},WeakMap});
+ const run=()=>vm.runInContext(`(${enterPlayerFullscreen.toString()})('https://www.espn.com/watch/player/_/id/game')`,context);
+ paused=true;assert.equal(await run(),'waiting');paused=false;sensitive=true;assert.equal(await run(),'sign-in');sensitive=false;assert.equal(full,0);
+ assert.equal(await run(),'fullscreen');assert.equal(full,1);
+ assert.equal(video.controls,true);document.fullscreenElement=null;dispatch();assert.equal(video.controls,false,'Restore native control setting on fullscreen exit');assert.equal(await run(),'dismissed');assert.equal(full,1,'Escape must not be fought by automatic reentry');
+ context.myrewrdFullscreenState=new WeakMap();fail=true;
+ for(let i=0;i<3;i++)assert.equal(await run(),'unavailable');assert.equal(await run(),'dismissed');assert.equal(full,4,'Bounded fullscreen retries');
+ context.myrewrdFullscreenState=new WeakMap();fail=false;document.fullscreenElement=null;
+ const button={getAttribute:()=> 'Fullscreen',textContent:'',getBoundingClientRect:()=>({width:20,height:20}),click:()=>Promise.resolve().then(()=>{buttonClicks++;document.fullscreenElement=target;dispatch();})};
+ document.querySelectorAll=selector=>selector.startsWith('input')?[]:selector==='video'?[video]:[button];
+ const before=full;assert.equal(await run(),'requested');await Promise.resolve();document.fullscreenElement=null;dispatch();assert.equal(await run(),'dismissed','Respect entry and Escape between polling ticks');assert.equal(buttonClicks,1);assert.equal(full,before,'Do not race successful asynchronous provider fullscreen');
+ context.location.pathname='/account';assert.equal(await run(),'navigation');
+ console.log('PASS playback route isolation, sign-in/paused gating, fullscreen success, Escape and bounded retry behavior');
+})().catch(e=>{console.error(e);process.exitCode=1});
