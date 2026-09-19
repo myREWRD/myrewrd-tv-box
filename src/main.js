@@ -357,9 +357,11 @@ function startGameDayMode(options = {}) {
 
   // Fetch and display sponsor data
   fetchSponsorData();
+  void gameDayTicker.refresh();
 }
 
 function openGameDayProvider(provider) {
+  if(streamView && streamPairingToken===config.tvToken && !streamView.webContents.isDestroyed()) gameDayProvider.capture(streamView.webContents.getURL());
   const url=gameDayProvider.choose(provider);
   if(!url) return false;
   return loadGameDayStream(url);
@@ -388,6 +390,12 @@ async function loadGameDayStream(url) {
     streamRetry = setTimeout(() => { if (current()) void loadGameDayStream(url); }, 60000);
   }
 }
+
+const { createGameDayTicker } = require("./game-day-ticker");
+const gameDayTicker = createGameDayTicker({fetch, getToken:()=>config.tvToken, apiBase:API_BASE,
+  publish: messages => { if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("ticker-update",messages); }
+});
+setInterval(()=>{if(currentMode === "gameday") void gameDayTicker.refresh();},60000);
 
 // ─── Sponsor Data ───────────────────────────────────────────────────────────
 async function fetchSponsorData() {
@@ -674,6 +682,10 @@ function trustedRenderer(event) {
 ipcMain.handle("get-config", () => ({ paired: config.paired, venueName: config.venueName }));
 ipcMain.handle("get-mode", () => currentMode);
 ipcMain.handle("get-sponsor", () => sponsorData);
+ipcMain.handle("get-ticker", event => {
+  const expected = require("url").pathToFileURL(path.join(__dirname,"pages","gameday-sponsor.html")).href;
+  return event.sender === mainWindow?.webContents && event.senderFrame === mainWindow.webContents.mainFrame && event.senderFrame.url === expected ? gameDayTicker.current() : [];
+});
 
 ipcMain.on("pair-with-token", (event, token) => {
   if (!trustedRenderer(event) || config.paired || !/^tv_[a-f0-9]+$/.test(token)) return;

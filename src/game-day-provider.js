@@ -12,13 +12,13 @@ function resumeUrl(provider,value) {
   } catch {return null;}
 }
 function createGameDayProvider({getConfig,save}) {
-  let remembered=null;
+  let remembered=Object.create(null);
   return {
-    reset(){remembered=null;},
+    reset(){remembered=Object.create(null);},
     selected(){return providerId(getConfig().gameDayProvider)||'youtube';},
-    choose(id){if(!providerId(id))return null;remembered=null;save({gameDayProvider:id});return HOMES[id];},
-    capture(url){remembered=resumeUrl(this.selected(),url);},
-    target(){return remembered||HOMES[this.selected()];},
+    choose(id){if(!providerId(id))return null;save({gameDayProvider:id});return this.target();},
+    capture(url){const target=resumeUrl(this.selected(),url);if(target)remembered[this.selected()]=target;},
+    target(){return remembered[this.selected()]||HOMES[this.selected()];},
   };
 }
 module.exports={HOMES,providerId,resumeUrl,createGameDayProvider};

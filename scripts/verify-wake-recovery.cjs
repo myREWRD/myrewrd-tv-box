@@ -58,6 +58,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       if (name === './live-remote') return { createLiveRemote: () => ({ tick: async () => {}, stop() {}, dispose() {} }) };
       if (name === './game-day-url') return require('../src/game-day-url');
       if (name === './game-day-provider') return require('../src/game-day-provider');
+      if (name === './game-day-ticker') return require('../src/game-day-ticker');
       if (name === './remote-status') return { createRemoteStatus: () => ({ tick: async () => {}, stop() {} }) };
       if (name === './provider-remote') return { createProviderRemote: () => ({ tick: async () => {}, stop() {}, resume() {} }), applyRemoteCommand: require('../src/provider-remote').applyRemoteCommand };
       if (name === './protected-playback') return { createProtectedPlayback: opts => require('../src/protected-playback').createProtectedPlayback({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
@@ -87,6 +88,12 @@ if (require.main === module) (async () => {
   }
   for (const value of [`${base}/tv/${token}`, `${base}/tv/pair`, 'https://tv.youtube.com/live', 'https://accounts.google.com/signin', 'https://www.hulu.com/live-tv']) {
     assert.equal(allowedNavigation(value, base, token), true);
+  }
+  for (const value of ['https://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN']) {
+    assert.equal(allowedNavigation(value, base, token), true);
+  }
+  for (const value of ['http://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com.evil.example/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/api/v2/authenticate/OTHER/ABC123', 'https://sp.auth.adobe.com/api/v2/ESPN/profiles', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=OTHER', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN&requestor_id=OTHER', 'https://sp.auth.adobe.com/', 'https://child.sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123']) {
+    assert.equal(allowedNavigation(value, base, token), false);
   }
   const paired = boot({ paired: true, tvToken: token }); await settle();
   assert.equal(paired.windows[0].urls.at(-1), `${base}/tv/${token}`);
