@@ -24,3 +24,9 @@ const {applyRemoteCommand}=require('../src/provider-remote');
 applyRemoteCommand({type:'saved_url',url:HOMES.hulu},{canControl:()=>true,openProvider(){throw Error('must not open URL');}}).then(result=>{
   assert.equal(result,'unavailable');console.log('PASS provider resume, restart scope, URL privacy, pairing reset and deprecated URL rejection');
 }).catch(error=>{console.error(error);process.exitCode=1;});
+
+const espnLive='https://www.espn.com/watch/player/_/id/game-123/startOption/live';
+assert.equal(resumeUrl('espn',espnLive+'?token=discard#discard'),espnLive);
+for(const suffix of ['/startOption/account','/startOption/live/extra','/startOption/','/signin'])assert.equal(resumeUrl('espn','https://www.espn.com/watch/player/_/id/game-123'+suffix),null);
+assert.equal(resumeUrl('espn',espnLive.replace('www.espn.com','auth.espn.com')),null);
+controller.choose('espn');controller.capture(espnLive);controller.choose('hulu');assert.equal(controller.choose('espn'),espnLive);
