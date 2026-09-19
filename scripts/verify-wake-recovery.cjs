@@ -89,10 +89,10 @@ if (require.main === module) (async () => {
   for (const value of [`${base}/tv/${token}`, `${base}/tv/pair`, 'https://tv.youtube.com/live', 'https://accounts.google.com/signin', 'https://www.hulu.com/live-tv']) {
     assert.equal(allowedNavigation(value, base, token), true);
   }
-  for (const value of ['https://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN']) {
+  for (const value of ['https://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN', 'https://sp.auth.adobe.com/adobe-services/oauth2?code=test-code&state=test-state']) {
     assert.equal(allowedNavigation(value, base, token), true);
   }
-  for (const value of ['http://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com.evil.example/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/api/v2/authenticate/OTHER/ABC123', 'https://sp.auth.adobe.com/api/v2/ESPN/profiles', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=OTHER', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN&requestor_id=OTHER', 'https://sp.auth.adobe.com/', 'https://child.sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123']) {
+  for (const value of ['https://sp.auth.adobe.com/adobe-services/oauth2', 'https://sp.auth.adobe.com/adobe-services/oauth2?code=test-code', 'https://sp.auth.adobe.com/adobe-services/oauth2?code=test-code&state=', 'https://sp.auth.adobe.com/adobe-services/oauth2?code=a&code=b&state=test', 'https://sp.auth.adobe.com/adobe-services/oauth2?code=a&state=b&state=c', 'https://sp.auth.adobe.com/adobe-services/oauth2/other?code=a&state=b', 'https://child.sp.auth.adobe.com/adobe-services/oauth2?code=a&state=b', 'http://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com.evil.example/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/api/v2/authenticate/OTHER/ABC123', 'https://sp.auth.adobe.com/api/v2/ESPN/profiles', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=OTHER', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN&requestor_id=OTHER', 'https://sp.auth.adobe.com/', 'https://child.sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123']) {
     assert.equal(allowedNavigation(value, base, token), false);
   }
   const paired = boot({ paired: true, tvToken: token }); await settle();
