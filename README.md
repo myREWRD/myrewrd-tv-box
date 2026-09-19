@@ -170,3 +170,7 @@ The receiver generates and overwrites one local file named live-remote-status.js
 ### 2.3.9 fullscreen recovery candidate
 
 2.3.8 failed physical fullscreen retention: ESPN returned to its webpage and scrollbar. The recovery candidate distinguishes explicit keyboard/pointer dismissal from provider-driven fullscreen exits. Unexpected exits retry after four seconds, with one document-wide budget of three requests per minute across replacement videos. A single listener set avoids retaining old ad/player nodes. Broadcast geometry remains unmodified (whole picture, 94% provider / 6% sponsor); physical acceptance is required before calling the fix complete.
+
+### 2.3.10 ESPN live-route correction
+
+Physical diagnosis found ESPN Watch Live navigates to `/watch/player/_/id/<id>/startOption/live`; the prior playback-route gate excluded that exact suffix, so neither automatic fullscreen nor channel recall ran there. Accept only that observed optional suffix on the existing exact ESPN HTTPS origin. Queries/fragments are still discarded; other suffixes and auth hosts remain rejected. 2.3.9 did not pass fullscreen acceptance; this correction requires a new signed physical test.

@@ -10,6 +10,7 @@ const {createProviderFullscreen,enterPlayerFullscreen}=require('../src/provider-
  assert.equal(calls.length,0);
  url='https://www.espn.com/watch/player/_/id/game';loading=true;await controller.tick();loading=false;available=false;await controller.tick();available=true;assert.equal(calls.length,0);
  await controller.tick();assert.equal(calls.length,1);assert.equal(calls[0][0],1004);assert.equal(calls[0][2],true);
+ url='https://www.espn.com/watch/player/_/id/game/startOption/live';await controller.tick();assert.match(calls.at(-1)[1][0].code,/startOption\/live/);
  hooks['before-input-event']({}, {type:'keyDown',key:'Escape'});await controller.tick();assert.match(calls.at(-1)[1][0].code,/,true\)/);
  hooks['did-navigate']();await controller.tick();assert.match(calls.at(-1)[1][0].code,/,false\)/);
  function fixture(){
