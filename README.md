@@ -174,3 +174,7 @@ The receiver generates and overwrites one local file named live-remote-status.js
 ### 2.3.10 ESPN live-route correction
 
 Physical diagnosis found ESPN Watch Live navigates to `/watch/player/_/id/<id>/startOption/live`; the prior playback-route gate excluded that exact suffix, so neither automatic fullscreen nor channel recall ran there. Accept only that observed optional suffix on the existing exact ESPN HTTPS origin. Queries/fragments are still discarded; other suffixes and auth hosts remain rejected. 2.3.9 did not pass fullscreen acceptance; this correction requires a new signed physical test.
+
+### 2.3.11 updater process identity
+
+The main process supplies Electron process metrics creationTime (OS epoch milliseconds) to the update supervisor instead of estimating start time from Node uptime. A physical 2.3.9 to 2.3.10 update stopped safely because its estimate differed by 5430 ms from Windows, exceeding the unchanged 5000 ms identity tolerance. Missing/mismatched metrics fail closed. PID, executable hashes, supervisor timestamp tolerance and rollback remain unchanged.

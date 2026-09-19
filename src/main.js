@@ -4,7 +4,7 @@
 const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage, components } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { prepareUpdate, createCandidate, blockedVersion } = require("./update");
+const { prepareUpdate, createCandidate, blockedVersion, currentProcessIdentity } = require("./update");
 const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
 const { allowedNavigation } = require("./navigation");
@@ -591,7 +591,7 @@ async function checkForUpdate(latestVersion, downloadUrl, sha256) {
     const previousExe = Number(APP_VERSION.split(".")[0]) < 2 && process.env.PORTABLE_EXECUTABLE_FILE
       ? process.env.PORTABLE_EXECUTABLE_FILE : process.execPath;
     const startupPath = path.join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "myREWRD-TV-Box.bat");
-    await prepareUpdate({ version: latestVersion, url: downloadUrl, sha256, installRoot: INSTALL_DIR,
+    await prepareUpdate({ ...currentProcessIdentity(app), version: latestVersion, url: downloadUrl, sha256, installRoot: INSTALL_DIR,
       profile: app.getPath("userData"), startupPath, previousExe });
     handoffRequested = true;
     app.quit();
