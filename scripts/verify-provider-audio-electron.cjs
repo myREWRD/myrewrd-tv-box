@@ -1,0 +1,38 @@
+// Actual Chromium media flags, with synthetic HTTPS and no provider accounts.
+const { app, BrowserWindow, protocol } = require('electron');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { applyRemoteCommand } = require('../src/provider-remote');
+const results = [];
+const resultFile = path.resolve(__dirname, '../../tv-presentation-validation/provider-audio-electron.json');
+fs.mkdirSync(path.dirname(resultFile), {recursive:true});
+const record = status => fs.writeFileSync(resultFile, JSON.stringify({status, results}));
+app.setPath('userData', path.resolve(__dirname, `../../tv-presentation-validation/audio-fixture-${process.pid}`));
+const timeout = setTimeout(() => { record('timeout'); app.exit(1); }, 30000);
+app.whenReady().then(async () => {
+  await protocol.handle('https', () => new Response(`<video id="player" muted></video><div id="shadow"></div><script>
+    player.volume=0.7; window.volumeEvents=0; player.addEventListener('volumechange',()=>volumeEvents++);
+    shadow.attachShadow({mode:'open'}).innerHTML='<audio muted></audio>';
+  </script>`, {headers:{'content-type':'text/html'}}));
+  const win = new BrowserWindow({show:false,webPreferences:{sandbox:true,nodeIntegration:false,contextIsolation:true}});
+  await win.loadURL('https://www.youtube.com/embed/fixture');
+  const contents=win.webContents;
+  const view={webContents:contents};
+  const context={getView:()=>view,canControl:()=>true,focus:()=>{},openProvider:()=>{}};
+  const read=()=>contents.executeJavaScript('({muted:player.muted,volume:player.volume,shadow:shadow.shadowRoot.querySelector("audio").muted,events:volumeEvents})');
+  assert.equal((await read()).muted,true);
+  contents.setAudioMuted(true);
+  assert.equal(await applyRemoteCommand({type:'mute',muted:false},context),'applied');
+  let state=await read(); assert.equal(state.muted,false);assert.equal(state.shadow,false);assert.equal(state.volume,0.7);assert.equal(contents.isAudioMuted(),false);
+  results.push('unmute clears initial player and output mute while preserving volume');
+  await applyRemoteCommand({type:'mute',muted:false},context);assert.equal((await read()).muted,false);
+  results.push('repeated Unmute remains unmuted');
+  await applyRemoteCommand({type:'mute',muted:true},context);
+  state=await read();assert.equal(state.muted,true);assert.equal(state.shadow,true);assert.equal(contents.isAudioMuted(),true);
+  results.push('Mute reaches player and output');
+  await contents.executeJavaScript('player.volume=0');
+  await applyRemoteCommand({type:'mute',muted:false},context);state=await read();assert.equal(state.volume,0.5);assert.equal(state.muted,false);assert.ok(state.events>0);
+  results.push('zero player volume restored to half; native volumechange events emitted');
+  clearTimeout(timeout);record('passed');win.destroy();app.quit();
+}).catch(error=>{results.push(error.message);record('failed');clearTimeout(timeout);app.exit(1);});
