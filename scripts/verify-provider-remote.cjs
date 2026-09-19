@@ -1,12 +1,12 @@
 const assert = require('node:assert/strict');
 const { applyRemoteCommand, createProviderRemote, providerPage } = require('../src/provider-remote');
 const events = [], opened = [];
-let available = true, url = 'https://tv.youtube.com/', loading = false;
+let available = true, url = 'https://tv.youtube.com/', loading = false, muted = false;
 const view = { getBounds: () => ({ width: 1920, height: 1015 }), webContents: {
   isDestroyed: () => false, getURL: () => url, isLoading: () => loading, focus() {},
   sendInputEvent: event => events.push(event), executeJavaScriptInIsolatedWorld: async () => {},
   navigationHistory: { canGoBack: () => true, goBack: () => events.push('back') },
-  reload: () => events.push('reload'), setAudioMuted: value => events.push(value),
+  reload: () => events.push('reload'), setAudioMuted: value => {muted=value;events.push(value);}, isAudioMuted:()=>muted,
 } };
 const context = { getView: () => view, canControl: () => available, openProvider: async value => opened.push(value), focus() {} };
 const apply = command => applyRemoteCommand(command,context);
@@ -28,7 +28,7 @@ const apply = command => applyRemoteCommand(command,context);
   available=true;view.webContents.executeJavaScriptInIsolatedWorld=prior;
   events.length=0;
   let mediaCode;
-  view.webContents.executeJavaScriptInIsolatedWorld=async(world,scripts,gesture)=>{assert.equal(world,1003);assert.equal(gesture,true);mediaCode=scripts[0].code;};
+  view.webContents.executeJavaScriptInIsolatedWorld=async(world,scripts,gesture)=>{assert.equal(world,1003);assert.equal(gesture,true);mediaCode=scripts[0].code;return true;};
   assert.equal(await apply({type:'mute',muted:false}),'applied');
   assert.match(mediaCode,/const muted = false/);assert.deepEqual(events.splice(0),[false]);
   assert.equal(await apply({type:'mute',muted:true}),'applied');
@@ -40,6 +40,9 @@ const apply = command => applyRemoteCommand(command,context);
   assert.equal(await apply({type:'mute',muted:false}),'unavailable');assert.equal(events.length,0,'navigation cannot unmute replacement page');url='https://tv.youtube.com/';
   view.webContents.executeJavaScriptInIsolatedWorld=async()=>{throw Error('renderer unavailable');};
   assert.equal(await apply({type:'mute',muted:false}),'unavailable');assert.equal(events.length,0);
+  view.webContents.executeJavaScriptInIsolatedWorld=async()=>false;
+  assert.equal(await apply({type:'mute',muted:false}),'unavailable');assert.equal(events.length,0,'missing media cannot claim unmute success');
+  for(const volume of [-1,101,NaN,0.5,'50'])assert.equal(await apply({type:'volume',volume}),'unavailable');
   view.webContents.executeJavaScriptInIsolatedWorld=prior;
 
   let polls=0, applied=0, reports=[], resolve, clock=1000;

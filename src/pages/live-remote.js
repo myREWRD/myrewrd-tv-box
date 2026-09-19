@@ -1,4 +1,4 @@
-let peer, frames, closed=false;
+let peer, frames, inputQueue, closed=false;
 async function start() {
   const state=await window.tvLive.state();
   if (!state) return;
@@ -6,15 +6,12 @@ async function start() {
   peer.ondatachannel=({channel})=>{
     if (channel.label==='frames') {frames=channel;return;}
     if (channel.label!=='controls') {channel.close();return;}
-    let queue=Promise.resolve(), pending=0;
+    inputQueue=createLiveInputQueue(value=>window.tvLive.input(value), result=>{
+      if(channel.readyState==='open' && channel.bufferedAmount<4096)channel.send(JSON.stringify(result));
+    });
     channel.onmessage=event=>{
       if (typeof event.data!=='string' || event.data.length>1024) return;
-      if(pending>=5)return;pending++;
-      queue=queue.then(async()=>{try {
-        const value=JSON.parse(event.data);
-        const applied=await window.tvLive.input(value);
-        if (channel.readyState==='open' && channel.bufferedAmount<4096) channel.send(JSON.stringify({seq:value.seq,applied}));
-      } catch { /* Invalid input is ignored. */ } finally {pending--;} });
+      try {inputQueue.push(JSON.parse(event.data));} catch { /* Invalid input is ignored. */ }
     };
   };
   await peer.setRemoteDescription(state.offer);
@@ -33,5 +30,5 @@ async function start() {
     await new Promise(resolve=>setTimeout(resolve,125));
   }
 }
-window.addEventListener('beforeunload',()=>{closed=true;peer?.close();});
+window.addEventListener('beforeunload',()=>{closed=true;inputQueue?.stop();peer?.close();});
 start().catch(()=>{closed=true;peer?.close();});
