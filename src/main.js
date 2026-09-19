@@ -15,7 +15,7 @@ const { createRemoteStatus } = require("./remote-status");
 const { createProviderRemote, applyRemoteCommand } = require("./provider-remote");
 const { createLiveRemote } = require("./live-remote");
 const { gameDayUrl } = require("./game-day-url");
-const { createGameDayProvider, HOMES } = require("./game-day-provider");
+const { createGameDayProvider, HOMES, resumeUrl } = require("./game-day-provider");
 const { createProtectedPlayback } = require("./protected-playback");
 const protectedPlayback = createProtectedPlayback({ components });
 
@@ -183,7 +183,7 @@ function loadConfig() {
 function saveConfig(data) {
   if ((Object.hasOwn(data,'tvToken') && data.tvToken!==config.tvToken) || data.paired===false) {
     gameDayProvider.reset();
-    data={...data,gameDayProvider:null};
+    data={...data,gameDayProvider:null,gameDayResumeUrls:null};
   }
   config = { ...config, ...data };
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
@@ -195,7 +195,7 @@ function saveConfig(data) {
 
 // ─── Window Management ──────────────────────────────────────────────────────
 function createMainWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  const { width, height } = screen.getPrimaryDisplay().bounds;
 
   mainWindow = new BrowserWindow({
     show: !updateCandidate,
@@ -211,6 +211,9 @@ function createMainWindow() {
     },
   });
 
+  mainWindow.on("resize", layoutGameDayView);
+  mainWindow.on("enter-full-screen", layoutGameDayView);
+  mainWindow.on("leave-full-screen", layoutGameDayView);
   guardNavigation(mainWindow.webContents);
   let boardNavigationSucceeded = false;
   mainWindow.webContents.on("did-navigate", (_event, url, responseCode) => {
@@ -256,6 +259,7 @@ function createMainWindow() {
 // ─── Mode Switching ─────────────────────────────────────────────────────────
 function switchMode(mode, options = {}) {
   liveRemote.stop();
+  providerResume.cancel();
   if (updateCandidate && !updateCandidate.active && mode !== "regular") return;
   recovery.cancel();
   currentMode = mode;
@@ -320,10 +324,13 @@ function switchMode(mode, options = {}) {
 }
 
 // ─── Game Day Mode ──────────────────────────────────────────────────────────
+function layoutGameDayView() {
+  if (!mainWindow || mainWindow.isDestroyed() || !streamView || streamView.webContents.isDestroyed()) return;
+  // Fullscreen content includes the taskbar area; workAreaSize does not.
+  const { width, height } = mainWindow.getContentBounds();
+  streamView.setBounds({ x: 0, y: 0, width, height: height - Math.round(height * 0.06) });
+}
 function startGameDayMode(options = {}) {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  const sponsorBarHeight = Math.round(height * 0.06); // 6% of screen for sponsor bar
-  const streamHeight = height - sponsorBarHeight;
 
   // Main window shows the sponsor bar at the bottom
   mainWindow.loadFile(path.join(__dirname, "pages", "gameday-sponsor.html"));
@@ -348,8 +355,14 @@ function startGameDayMode(options = {}) {
   streamView.webContents.on("did-navigate", (_event, _url, responseCode) => {
     if (responseCode >= 500) recovery.schedule(15000);
   });
-  streamView.setBounds({ x: 0, y: 0, width, height: streamHeight });
-  streamView.setAutoResize({ width: true, height: false });
+  layoutGameDayView();
+  const attachedView=streamView,attachedToken=config.tvToken;
+  const capturePlayback=(_event,url,isMainFrame=true)=>{
+    if(isMainFrame && streamView===attachedView && config.paired && config.tvToken===attachedToken)
+      gameDayProvider.capture(url);
+  };
+  streamView.webContents.on('did-navigate',(_event,url)=>capturePlayback(_event,url));
+  streamView.webContents.on('did-navigate-in-page',capturePlayback);
 
   // Load the stream URL or YouTube TV
   const streamUrl = gameDayProvider.target();
@@ -362,6 +375,8 @@ function startGameDayMode(options = {}) {
 
 function openGameDayProvider(provider) {
   if(streamView && streamPairingToken===config.tvToken && !streamView.webContents.isDestroyed()) gameDayProvider.capture(streamView.webContents.getURL());
+  if(provider===gameDayProvider.selected() && streamView && !streamView.webContents.isDestroyed()
+      && resumeUrl(provider,streamView.webContents.getURL())) return true;
   const url=gameDayProvider.choose(provider);
   if(!url) return false;
   return loadGameDayStream(url);
@@ -371,6 +386,8 @@ async function loadGameDayStream(url) {
   url = gameDayUrl(url);
   if (!streamView || !allowedNavigation(url, API_BASE, config.tvToken)) return;
   const view = streamView;
+  providerResume.cancel();
+  if(gameDayProvider.hasResume())providerResume.request(view.webContents,url);
   const request = ++streamRequest;
   streamTarget = url;
   boardStatus = 'connecting';
@@ -403,7 +420,10 @@ const providerFullscreen = createProviderFullscreen({getView:()=>streamView,
   getProvider:()=>gameDayProvider.selected(),
   canExpand:()=>currentMode==='gameday' && !isUpdating && providerWindows.size===0
 });
-setInterval(()=>{void providerFullscreen.tick();},2000);
+const { createProviderResume } = require("./provider-resume");
+const providerResume = createProviderResume({getView:()=>streamView,getProvider:()=>gameDayProvider.selected(),
+  canResume:()=>currentMode==='gameday' && !isUpdating && providerWindows.size===0});
+setInterval(()=>{void providerResume.tick();void providerFullscreen.tick();},2000);
 
 // ─── Sponsor Data ───────────────────────────────────────────────────────────
 async function fetchSponsorData() {

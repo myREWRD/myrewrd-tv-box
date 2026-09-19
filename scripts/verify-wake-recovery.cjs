@@ -35,6 +35,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
     isMinimized() { return false; }
     show() {} restore() {} setKiosk(v) { this.kiosk = v; }
     setFullScreen(v) { this.fullscreen = v; } focus() {}
+    getContentBounds() { return {x:0,y:0,width:1920,height:1080}; }
     addBrowserView() {} removeBrowserView() {} setBounds() {} setAutoResize() {}
     static getAllWindows() { return windows.filter(w => !w.destroyed); }
   }
@@ -43,7 +44,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
   const powerMonitor = new EventEmitter();
   const context = vm.createContext({
     require(name) {
-      if (name === 'electron') return { app, components, BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 1920, height: 1080 } }) } };
+      if (name === 'electron') return { app, components, BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ bounds: { width: 1920, height: 1080 }, workAreaSize: { width: 1920, height: 1032 } }) } };
       if (name === 'fs') return {
         existsSync: p => files.has(p), readFileSync: p => files.get(p),
         mkdirSync() {}, writeFileSync: (p, data) => files.set(p, data),
@@ -58,6 +59,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       if (name === './live-remote') return { createLiveRemote: () => ({ tick: async () => {}, stop() {}, dispose() {} }) };
       if (name === './game-day-url') return require('../src/game-day-url');
       if (name === './game-day-provider') return require('../src/game-day-provider');
+      if (name === './provider-resume') return require('../src/provider-resume');
       if (name === './provider-fullscreen') return require('../src/provider-fullscreen');
       if (name === './game-day-ticker') return require('../src/game-day-ticker');
       if (name === './remote-status') return { createRemoteStatus: () => ({ tick: async () => {}, stop() {} }) };
@@ -193,7 +195,12 @@ if (require.main === module) (async () => {
   assert.equal(fresh.run('streamView').urls.at(-1),'https://www.hulu.com/watch/channel-fixture','Live Games takeover returns to provider channel');
   const providerConfig=JSON.parse(fresh.files.get(path.join('/fixture','config.json')));
   assert.equal(providerConfig.gameDayProvider,'hulu');
-  assert.equal(JSON.stringify(providerConfig).includes('channel-fixture'),false,'provider browsing never persisted');
+  assert.equal(providerConfig.gameDayResumeUrls.hulu,'https://www.hulu.com/watch/channel-fixture','sanitized channel persists locally');
+  assert.equal(JSON.stringify(providerConfig).includes('secret=discard'),false,'query credentials never persisted');
+  const channelRestart=boot(providerConfig);await settle();channelRestart.run('switchMode("gameday")');await settle();
+  assert.equal(channelRestart.run('streamView').urls.at(-1),'https://www.hulu.com/watch/channel-fixture','actual main restart restores saved channel');
+  channelRestart.run('handleCommand({type:"unpair"})');await settle();
+  assert.equal(channelRestart.run('config.gameDayResumeUrls'),null,'unpair clears saved channel paths');
 
   // Unpair invalidates in-flight work and pending recovery; wake never resurrects it.
   paired.run('handleCommand({ type: "unpair" })'); await settle();

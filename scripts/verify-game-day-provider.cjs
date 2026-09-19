@@ -7,8 +7,8 @@ assert.equal(controller.choose('__proto__'),null);
 controller.choose('hulu');
 controller.capture('https://www.hulu.com/watch/channel-123?secret=discard#also-discard');
 assert.equal(controller.target(),'https://www.hulu.com/watch/channel-123');
-assert.deepEqual(writes,[{gameDayProvider:'hulu'}]);
-assert.equal(createGameDayProvider({getConfig:()=>config,save(){}}).target(),HOMES.hulu,'restart remembers provider but not channel URL');
+assert.deepEqual(writes,[{gameDayProvider:'hulu'},{gameDayResumeUrls:{hulu:'https://www.hulu.com/watch/channel-123'}}]);
+assert.equal(createGameDayProvider({getConfig:()=>config,save(){}}).target(),'https://www.hulu.com/watch/channel-123','restart restores sanitized provider playback route');
 for(const value of ['https://www.hulu.com/login','https://auth.hulu.com/watch/test','https://www.hulu.com.evil.invalid/watch/test','https://user:pass@www.hulu.com/watch/test','http://www.hulu.com/watch/test','https://www.hulu.com:444/watch/test','https://www.hulu.com/account','file:///watch/test','https://tv.youtube.com/watch/test']) {
   assert.equal(resumeUrl('hulu',value),null,value);
 }
@@ -30,3 +30,13 @@ assert.equal(resumeUrl('espn',espnLive+'?token=discard#discard'),espnLive);
 for(const suffix of ['/startOption/account','/startOption/live/extra','/startOption/','/signin'])assert.equal(resumeUrl('espn','https://www.espn.com/watch/player/_/id/game-123'+suffix),null);
 assert.equal(resumeUrl('espn',espnLive.replace('www.espn.com','auth.espn.com')),null);
 controller.choose('espn');controller.capture(espnLive);controller.choose('hulu');assert.equal(controller.choose('espn'),espnLive);
+
+for(const [id,url] of Object.entries({youtube:'https://tv.youtube.com/watch/channel1',hulu:'https://www.hulu.com/watch/channel-1',peacock:'https://www.peacocktv.com/watch/playback/live/channel-1',espn:espnLive})){
+ controller.choose(id);controller.capture(url+'?secret=discard#private');
+ const restored=createGameDayProvider({getConfig:()=>config,save(){}});
+ assert.equal(restored.target(),url,id+' restart restores its own destination');
+}
+const polluted=createGameDayProvider({getConfig:()=>({gameDayProvider:'hulu',gameDayResumeUrls:{hulu:'https://auth.hulu.com/login?token=secret',youtube:'https://evil.test/watch/a'}}),save(){}});
+assert.equal(polluted.target(),HOMES.hulu,'invalid persisted routes never navigate');
+assert.match(main,/gameDayResumeUrls:null/,'unpair clears persisted destinations');
+assert.match(main,/did-navigate-in-page.*capturePlayback/,'SPA channel changes captured');

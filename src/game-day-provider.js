@@ -1,6 +1,6 @@
 const HOMES = Object.freeze({youtube:'https://tv.youtube.com/',hulu:'https://www.hulu.com/',peacock:'https://www.peacocktv.com/',espn:'https://www.espn.com/watch/'});
 function providerId(value) { return Object.hasOwn(HOMES,value) ? value : null; }
-// Only playback routes are retained, in memory only. Never retain sign-in redirects,
+// Only allowlisted playback routes are retained in the local paired-device config. Never retain sign-in redirects,
 // arbitrary navigation, query tokens, account paths, or provider cookies here.
 function resumeUrl(provider,value) {
   try {
@@ -13,11 +13,19 @@ function resumeUrl(provider,value) {
 }
 function createGameDayProvider({getConfig,save}) {
   let remembered=Object.create(null);
+  const stored=getConfig().gameDayResumeUrls;
+  if(stored && typeof stored==='object' && !Array.isArray(stored)) {
+    for(const id of Object.keys(HOMES)){const target=resumeUrl(id,stored[id]);if(target)remembered[id]=target;}
+  }
   return {
     reset(){remembered=Object.create(null);},
     selected(){return providerId(getConfig().gameDayProvider)||'youtube';},
     choose(id){if(!providerId(id))return null;save({gameDayProvider:id});return this.target();},
-    capture(url){const target=resumeUrl(this.selected(),url);if(target)remembered[this.selected()]=target;},
+    capture(url){
+      const id=this.selected(),target=resumeUrl(id,url);
+      if(target && remembered[id]!==target){remembered[id]=target;save({gameDayResumeUrls:{...remembered}});}
+    },
+    hasResume(){return Boolean(remembered[this.selected()]);},
     target(){return remembered[this.selected()]||HOMES[this.selected()];},
   };
 }
