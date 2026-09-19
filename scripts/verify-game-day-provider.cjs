@@ -12,9 +12,9 @@ assert.equal(createGameDayProvider({getConfig:()=>config,save(){}}).target(),HOM
 for(const value of ['https://www.hulu.com/login','https://auth.hulu.com/watch/test','https://www.hulu.com.evil.invalid/watch/test','https://user:pass@www.hulu.com/watch/test','http://www.hulu.com/watch/test','https://www.hulu.com:444/watch/test','https://www.hulu.com/account','file:///watch/test','https://tv.youtube.com/watch/test']) {
   assert.equal(resumeUrl('hulu',value),null,value);
 }
-controller.capture('https://www.hulu.com/login');assert.equal(controller.target(),HOMES.hulu,'login fallback');
+controller.capture('https://www.hulu.com/login');assert.equal(controller.target(),'https://www.hulu.com/watch/channel-123','sign-in does not overwrite a safe saved playback route');
 controller.capture('https://www.hulu.com/watch/channel');controller.choose('peacock');assert.equal(controller.target(),HOMES.peacock,'new provider clears old channel');
-controller.capture('https://www.peacocktv.com/watch/playback/live/channel');controller.reset();config={};assert.equal(controller.target(),HOMES.youtube,'pairing reset');
+controller.capture('https://www.peacocktv.com/watch/playback/live/channel');assert.equal(controller.choose('hulu'),'https://www.hulu.com/watch/channel','switch back restores Hulu');assert.equal(controller.choose('peacock'),'https://www.peacocktv.com/watch/playback/live/channel','each provider keeps its own route');controller.reset();config={};assert.equal(controller.target(),HOMES.youtube,'pairing reset');
 const fs=require('node:fs'),path=require('node:path');
 const main=fs.readFileSync(path.join(__dirname,'../src/main.js'),'utf8');
 assert.match(main,/streamPairingToken===config.tvToken/);
