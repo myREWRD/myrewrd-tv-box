@@ -22,6 +22,10 @@ jobs:
       - run: npm install
       - name: Source regressions
         run: |
+          node scripts/verify-live-input-queue.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-remote-restart.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-live-remote.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-game-day-url.cjs

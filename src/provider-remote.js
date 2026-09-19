@@ -59,16 +59,22 @@ async function applyRemoteCommand(command, { getView, canControl, openProvider, 
       if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
       return 'applied';
     case 'reload': contents.reload(); return 'applied';
+    case 'volume':
     case 'mute': {
-      if (typeof command.muted !== 'boolean') return 'unavailable';
+      if(command.type==='mute' && typeof command.muted!=='boolean')return 'unavailable';
+      if(command.type==='volume' && (!Number.isInteger(command.volume) || command.volume<0 || command.volume>100))return 'unavailable';
+      const muted=command.type==='mute'?command.muted:command.volume===0;
       const url = contents.getURL();
       // Mute immediately at the output layer. Unmute only after clearing the
       // player's separate mute flag (saved YouTube embeds start with mute=1).
-      if (command.muted) contents.setAudioMuted(true);
-      try { await contents.executeJavaScriptInIsolatedWorld(1003, [{ code: mediaMuteCode(command.muted) }], true); }
+      if (muted) contents.setAudioMuted(true);
+      let applied;
+      try { applied=await contents.executeJavaScriptInIsolatedWorld(1003, [{ code: mediaMuteCode(muted,command.type==='volume'?command.volume:undefined) }], true); }
       catch { return 'unavailable'; }
       if (!canControl() || getView() !== view || contents.isDestroyed() || contents.isLoading() || contents.getURL() !== url) return 'unavailable';
-      contents.setAudioMuted(command.muted);
+      if(applied!==true)return 'unavailable';
+      contents.setAudioMuted(muted);
+      if(contents.isAudioMuted()!==muted)return 'unavailable';
       return 'applied';
     }
     default: return 'unavailable';

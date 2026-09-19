@@ -34,5 +34,11 @@ app.whenReady().then(async () => {
   await contents.executeJavaScript('player.volume=0');
   await applyRemoteCommand({type:'mute',muted:false},context);state=await read();assert.equal(state.volume,0.5);assert.equal(state.muted,false);assert.ok(state.events>0);
   results.push('zero player volume restored to half; native volumechange events emitted');
+  assert.equal(await applyRemoteCommand({type:'volume',volume:25},context),'applied');
+  assert.equal((await read()).volume,0.25);assert.equal(await contents.executeJavaScript('player.paused'),true);
+  results.push('explicit volume works without starting paused media');
+  await contents.executeJavaScript('document.body.innerHTML="<iframe srcdoc=\\"<video muted></video>\\"></iframe>"');
+  assert.equal(await applyRemoteCommand({type:'mute',muted:false},context),'unavailable');
+  results.push('no top-document player never reports successful unmute');
   clearTimeout(timeout);record('passed');win.destroy();app.quit();
 }).catch(error=>{results.push(error.message);record('failed');clearTimeout(timeout);app.exit(1);});

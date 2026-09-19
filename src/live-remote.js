@@ -112,7 +112,7 @@ function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, g
     if (++count>35) return false;
     sequence=envelope.seq;
     const command=envelope.command;
-    if (!command || !['point','key','scroll','back','reload','mute'].includes(command.type)) return false;
+    if (!command || !['point','key','scroll','back','reload','mute','volume'].includes(command.type)) return false;
     applying=true;
     const id = session.id;
     try { return await apply(command, () => valid() && session?.id===id)==='applied'; } finally { applying=false; }

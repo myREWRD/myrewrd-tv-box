@@ -74,6 +74,7 @@ let sponsorData = null;
 let isUpdating = false; // Prevent multiple simultaneous updates
 let retryUpdateAfter = 0;
 let handoffRequested = false;
+let restartTimer = null;
 let pollController = null;
 const providerWindows = new Set();
 let presentationKey = null;
@@ -95,12 +96,25 @@ const remoteStatus = createRemoteStatus({ apiBase: API_BASE, getToken: () => con
   canReport: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)) });
 const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () => config.tvToken, getKey: () => presentationKey,
   canPoll: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)),
-  apply: command => applyRemoteCommand(command, {
+  apply: command => command?.type==='restart_app' ? requestRemoteRestart() : applyRemoteCommand(command, {
     getView: () => streamView,
     canControl: () => currentMode === 'gameday' && !presentation.active && !providerWindows.size && !isUpdating,
     openProvider: url => loadGameDayStream(url), focus: () => mainWindow?.focus(),
   }),
 });
+
+function requestRemoteRestart() {
+  if(!config.paired || handoffRequested || isUpdating || restartTimer || presentation.active || (updateCandidate && !updateCandidate.active))return 'unavailable';
+  // Leave time for the claimed command receipt. Never replay an updater job flag.
+  const restartToken=config.tvToken, restartKey=presentationKey;
+  restartTimer=setTimeout(()=>{
+    if(!config.paired || config.tvToken!==restartToken || presentationKey!==restartKey || isUpdating || handoffRequested || presentation.active || (updateCandidate && !updateCandidate.active)){restartTimer=null;return;}
+    app.relaunch({args:[]});
+    handoffRequested=true;
+    app.quit();
+  },2000);
+  return 'applied';
+}
 
 const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
   diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'live-remote-status.json'),JSON.stringify(record)),
