@@ -397,6 +397,14 @@ const gameDayTicker = createGameDayTicker({fetch, getToken:()=>config.tvToken, a
 });
 setInterval(()=>{if(currentMode === "gameday") void gameDayTicker.refresh();},60000);
 
+// Fullscreen remains inside the 94% BrowserView; the sponsor stays visible.
+const { createProviderFullscreen } = require("./provider-fullscreen");
+const providerFullscreen = createProviderFullscreen({getView:()=>streamView,
+  getProvider:()=>gameDayProvider.selected(),
+  canExpand:()=>currentMode==='gameday' && !isUpdating && providerWindows.size===0
+});
+setInterval(()=>{void providerFullscreen.tick();},2000);
+
 // ─── Sponsor Data ───────────────────────────────────────────────────────────
 async function fetchSponsorData() {
   if (!config.tvToken) return;

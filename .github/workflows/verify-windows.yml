@@ -35,6 +35,7 @@ jobs:
           node scripts/verify-provider-remote.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-wake-recovery.cjs
+          node scripts/verify-provider-fullscreen.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-game-day-ticker.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

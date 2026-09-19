@@ -1,5 +1,11 @@
 # myREWRD TV Box
 
+## 2.3.8 automatic provider player expansion (candidate)
+
+On supported selected-provider playback routes, Game Day detects a visible playing video and requests player fullscreen inside its 94% BrowserView. It first gives the provider's own button a bounded opportunity to enter fullscreen, then falls back to the existing video's native fullscreen/controls. No media element is replaced or moved; DRM and playback sessions remain provider-owned. Native controls are restored to their earlier state on exit. The sponsor strip stays outside the view.
+
+Fullscreen is attempted at most three times per video and stops after success; Dismiss/Escape is respected so operators can choose another channel. Sign-in fields, provider popups, provider home pages and other display modes are excluded. Cross-origin iframe video is not inspected. Provider-specific physical acceptance remains required; this is not a claim of universal fullscreen compatibility.
+
 [DIAGNOSED; FIX ACCEPTANCE PENDING 2026-09-19] Physical TV network diagnostics show Hulu returns HTTP 302 to the exact Adobe Pass `/adobe-services/oauth2` callback, which 2.3.6 rejects. Candidate 2.3.7 permits that exact HTTPS production-host path only with one bounded nonempty code and state parameter. No auth values are retained or logged. Missing/duplicate fields, child hosts and sibling paths remain rejected. End-to-end provider login acceptance remains pending.
 
 ## 2.3.7 sponsor-strip correction (candidate)
