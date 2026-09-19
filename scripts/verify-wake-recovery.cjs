@@ -92,7 +92,7 @@ if (require.main === module) (async () => {
   for (const value of ['https://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN']) {
     assert.equal(allowedNavigation(value, base, token), true);
   }
-  for (const value of ['http://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com.evil.example/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/api/v2/authenticate/OTHER/ABC123', 'https://sp.auth.adobe.com/api/v2/ESPN/profiles', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=OTHER', 'https://sp.auth.adobe.com/', 'https://child.sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123']) {
+  for (const value of ['http://sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com.evil.example/api/v2/authenticate/ESPN/ABC123', 'https://sp.auth.adobe.com/api/v2/authenticate/OTHER/ABC123', 'https://sp.auth.adobe.com/api/v2/ESPN/profiles', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=OTHER', 'https://sp.auth.adobe.com/adobe-services/authenticate/saml?requestor_id=ESPN&requestor_id=OTHER', 'https://sp.auth.adobe.com/', 'https://child.sp.auth.adobe.com/api/v2/authenticate/ESPN/ABC123']) {
     assert.equal(allowedNavigation(value, base, token), false);
   }
   const paired = boot({ paired: true, tvToken: token }); await settle();
