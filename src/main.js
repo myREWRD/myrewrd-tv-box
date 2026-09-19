@@ -15,6 +15,7 @@ const { createRemoteStatus } = require("./remote-status");
 const { createProviderRemote, applyRemoteCommand } = require("./provider-remote");
 const { createLiveRemote } = require("./live-remote");
 const { gameDayUrl } = require("./game-day-url");
+const { createGameDayProvider, HOMES } = require("./game-day-provider");
 const { createProtectedPlayback } = require("./protected-playback");
 const protectedPlayback = createProtectedPlayback({ components });
 
@@ -62,11 +63,13 @@ const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.join(app.getPath
 
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
+let streamPairingToken = null;
 let streamRequest = 0;
 let streamRetry = null;
 let streamTarget = null;
 let overlayWindow = null; // Transparent overlay for sponsor bar
 let config = loadConfig();
+const gameDayProvider = createGameDayProvider({getConfig:()=>config,save:saveConfig});
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
 let boardStatus = "connecting";
 let configuredMode = "regular";
@@ -99,7 +102,7 @@ const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () =>
   apply: command => command?.type==='restart_app' ? requestRemoteRestart() : applyRemoteCommand(command, {
     getView: () => streamView,
     canControl: () => currentMode === 'gameday' && !presentation.active && !providerWindows.size && !isUpdating,
-    openProvider: url => loadGameDayStream(url), focus: () => mainWindow?.focus(),
+    openProvider: (url, provider) => openGameDayProvider(provider), focus: () => mainWindow?.focus(),
   }),
 });
 
@@ -122,7 +125,7 @@ const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
   canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating),
   apply:(command, liveCurrent)=>applyRemoteCommand(command,{getView:()=>streamView,
     canControl:()=>liveCurrent() && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating,
-    openProvider:url=>loadGameDayStream(url),focus:()=>mainWindow?.focus()})
+    openProvider:(url,provider)=>openGameDayProvider(provider),focus:()=>mainWindow?.focus()})
 });
 
 function restoreBoard() {
@@ -178,6 +181,10 @@ function loadConfig() {
 }
 
 function saveConfig(data) {
+  if ((Object.hasOwn(data,'tvToken') && data.tvToken!==config.tvToken) || data.paired===false) {
+    gameDayProvider.reset();
+    data={...data,gameDayProvider:null};
+  }
   config = { ...config, ...data };
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
@@ -256,6 +263,7 @@ function switchMode(mode, options = {}) {
   console.log(`[TV Box] Switching display mode`);
 
   // Remove any existing stream view
+  if(streamView && config.paired && streamPairingToken===config.tvToken && !streamView.webContents.isDestroyed()) gameDayProvider.capture(streamView.webContents.getURL());
   streamRequest++;
   clearTimeout(streamRetry);
   streamRetry = null;
@@ -331,6 +339,7 @@ function startGameDayMode(options = {}) {
   });
 
   mainWindow.addBrowserView(streamView);
+  streamPairingToken=config.tvToken;
   guardNavigation(streamView.webContents);
   streamView.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
     if (isMainFrame && code !== -3) recovery.schedule(15000);
@@ -343,11 +352,17 @@ function startGameDayMode(options = {}) {
   streamView.setAutoResize({ width: true, height: false });
 
   // Load the stream URL or YouTube TV
-  const streamUrl = options.streamUrl || "https://tv.youtube.com";
+  const streamUrl = gameDayProvider.target();
   loadGameDayStream(streamUrl);
 
   // Fetch and display sponsor data
   fetchSponsorData();
+}
+
+function openGameDayProvider(provider) {
+  const url=gameDayProvider.choose(provider);
+  if(!url) return false;
+  return loadGameDayStream(url);
 }
 
 async function loadGameDayStream(url) {
@@ -581,9 +596,7 @@ function handleCommand(msg) {
       break;
 
     case "set_stream_url":
-      if (currentMode === "gameday" && streamView) {
-        void loadGameDayStream(msg.url);
-      }
+      // Deprecated Game Day URL command. Live Stream is rendered by the board.
       break;
 
     case "open_service":
@@ -594,7 +607,8 @@ function handleCommand(msg) {
     case "navigate":
       // Navigate the stream view to a specific URL
       if (streamView && streamView.webContents) {
-        void loadGameDayStream(msg.url);
+        const provider=Object.keys(HOMES).find(id=>msg.url===HOMES[id] || msg.url===HOMES[id].replace(/\/$/,''));
+        if(provider) void openGameDayProvider(provider);
       } else {
         // If no stream view exists, load URL in main window
         navigate(mainWindow.webContents, msg.url);
