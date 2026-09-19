@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("tvBox", {
   getConfig: () => ipcRenderer.invoke("get-config"),
   getMode: () => ipcRenderer.invoke("get-mode"),
+  getTicker: () => ipcRenderer.invoke("get-ticker"),
+  onTickerUpdate: (callback) => ipcRenderer.on("ticker-update", (_, data) => callback(data)),
   getSponsor: () => ipcRenderer.invoke("get-sponsor"),
   pairWithToken: (token) => ipcRenderer.send("pair-with-token", token),
   switchMode: (mode, options) => ipcRenderer.send("switch-mode", mode, options),

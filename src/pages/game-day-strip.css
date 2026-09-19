@@ -1,0 +1,15 @@
+/* Keep the native and web Game Day strip at 6vh: provider geometry depends on it. */
+.gd-strip{height:6vh;flex:0 0 6vh;display:flex;align-items:center;overflow:hidden;background:linear-gradient(#0f172a,#020617);border-top:1px solid #fbbf244d;color:#e2e8f0;font-family:Arial,sans-serif;box-sizing:border-box}
+.gd-sponsor{width:44%;flex:0 0 44%;height:100%;display:flex;align-items:center;justify-content:center;gap:1vw;padding:0 1vw;box-sizing:border-box;border-inline:1px solid #94a3b833;background:linear-gradient(#142037,#060d1b);z-index:1;overflow:hidden}
+.gd-sponsor-copy{min-width:0;text-align:left}
+.gd-label{display:block;font-size:1.15vh;line-height:1.25;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#cbd5e1}
+.gd-name{display:block;font-size:1.9vh;line-height:1.1;font-weight:900;text-transform:uppercase;color:#fbbf24;overflow-wrap:anywhere}
+.gd-logo{height:4.4vh;width:auto;max-width:8vw;object-fit:contain;flex-shrink:0}
+.gd-lane{flex:1;min-width:0;overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.gd-track{display:flex;width:max-content;animation:gd-scroll var(--gd-duration,30s) linear infinite;will-change:transform}
+.gd-lane-right .gd-track{animation-delay:calc(var(--gd-duration,30s) * -.5)}
+.gd-group{display:flex;align-items:center;flex-shrink:0;min-width:var(--gd-lane-width,28vw)}
+.gd-message{flex-shrink:0;white-space:nowrap;padding-inline:1.5vw;font-size:1.65vh;font-weight:600;line-height:2}
+.gd-message::before{content:'•';color:#2dd4bf;margin-right:1.5vw}
+@keyframes gd-scroll{to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.gd-track{animation:none;transform:none}.gd-group[aria-hidden=true]{display:none}.gd-message{white-space:normal;font-size:1.35vh;line-height:1.3}}
