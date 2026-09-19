@@ -8,6 +8,10 @@ function allowedNavigation(value, apiBase, token) {
     if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
     if (url.origin === apiBase) return url.pathname === "/tv/pair"
       || (Boolean(token) && url.pathname === `/tv/${token}`);
+    // ESPN's TV-provider handoff uses Adobe Pass before reaching Hulu login.
+    // Permit only ESPN authentication routes on the exact production host.
+    if (url.hostname === "sp.auth.adobe.com") return /^\/api\/v2\/authenticate\/ESPN\/[A-Za-z0-9_-]+\/?$/.test(url.pathname)
+      || (url.pathname === "/adobe-services/authenticate/saml" && url.searchParams.get("requestor_id") === "ESPN");
     return [...SERVICE_HOSTS, ...LOGIN_HOSTS].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`));
   } catch { return false; }
 }
