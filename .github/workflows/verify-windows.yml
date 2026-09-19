@@ -38,6 +38,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-provider-fullscreen.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-provider-resume.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-process-identity.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-game-day-ticker.cjs
@@ -46,6 +48,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-live-game-takeover.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify provider and sponsor geometry
+        run: |
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-game-day-layout-electron.cjs' -WindowStyle Hidden -PassThru -Wait
+          if ($fixture.ExitCode -ne 0) { exit 1 }
+
       - name: Verify real Windows process identity
         run: |
           $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-process-identity-electron.cjs' -WindowStyle Hidden -PassThru -Wait

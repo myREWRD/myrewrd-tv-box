@@ -1,5 +1,15 @@
 # myREWRD TV Box
 
+## 2.3.12 candidate: fullscreen geometry and provider restoration
+
+The provider view uses the actual fullscreen window content bounds and follows resize/fullscreen changes. Windows workAreaSize excludes the taskbar and previously left a gap before the sponsor strip (observed window 1280x720, work area 1280x672, provider height 632). The separate 6vh sponsor/ticker strip is preserved. Whole-picture fitting still requires narrow side bars for a 16:9 broadcast above that strip; no crop/stretch is introduced.
+
+Each supported provider's allowlisted playback path is saved locally as gameDayResumeUrls in the existing paired-device config. Main-frame and SPA navigation capture changes, plus the existing capture before leaving. Query strings, fragments, sign-in/account/foreign routes are excluded; invalid persisted entries are rejected on load. Re-pair/unpair clears these paths and the provider selection. Paths are not sent to the backend. Existing configs without this optional field still open the provider home.
+
+Returning to a saved route starts a 60-second, three-attempt restoration window for that exact provider/path. It requests play and uses a visible exact Go live/Back to live/Jump to live/Return to live provider control when available; it does not seek finite VOD to its end. Main-process input/navigation cancellation and an armed renderer trusted-input guard prevent delayed restoration from overriding operator input. Media play promises do not block later provider restores. Selecting an already active provider playback page avoids reloading it. Authentication, subscription access, ended events and provider redirects may require operator action; this does not guarantee a live edge on providers without a supported control.
+
+Validation includes route privacy/restart/reset tests, bounded resume/cancellation/stalled-media tests and a real Windows Electron geometry test at 720p, 1080p and resize. Physical provider switching/restart and production package acceptance must be recorded separately in canonical dashboard docs.
+
 ## 2.3.8 automatic provider player expansion (candidate)
 
 On supported selected-provider playback routes, Game Day detects a visible playing video and requests player fullscreen inside its 94% BrowserView. It first gives the provider's own button a bounded opportunity to enter fullscreen, then falls back to the existing video's native fullscreen/controls. No media element is replaced or moved; DRM and playback sessions remain provider-owned. Native controls are restored to their earlier state on exit. The sponsor strip stays outside the view.
