@@ -7,6 +7,13 @@ const { slotFor, stageRuntime, assertPlainTree } = require('./installed-runtime'
 const scriptRoot = __dirname.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked');
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+function currentProcessIdentity(app, pid = process.pid, now = Date.now()) {
+  const metric = app.getAppMetrics().find(item => item.pid === pid && item.type === 'Browser');
+  if (!Number.isFinite(metric?.creationTime) || metric.creationTime <= 0 || metric.creationTime > now) {
+    throw Error('Operating-system process identity unavailable');
+  }
+  return { parentPid: pid, parentStartedAt: metric.creationTime };
+}
 function read(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }
 function mark(job, name, phase) {
   fs.writeFileSync(path.join(job.directory, name), JSON.stringify({ nonce: job.nonce, version: job.version, phase }));
@@ -178,4 +185,4 @@ function createCandidate({ argv, installRoot, profile, version, app, activate })
     boardReady() { if (!ready) { ready = true; mark(job, 'candidate.ready.json', 'board-ready'); } },
   };
 }
-module.exports = { prepareUpdate, createCandidate, blockedVersion, validateArtifact, downloadArtifact };
+module.exports = { prepareUpdate, createCandidate, blockedVersion, validateArtifact, downloadArtifact, currentProcessIdentity };
