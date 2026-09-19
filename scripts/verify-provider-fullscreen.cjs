@@ -2,15 +2,16 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const {createProviderFullscreen,enterPlayerFullscreen}=require('../src/provider-fullscreen');
 (async()=>{
- let url='https://www.espn.com/watch/player/_/id/game',available=true,loading=false,calls=[];
+ let provider='espn',url='https://www.espn.com/watch/player/_/id/game',available=true,loading=false,calls=[];
  const hooks={};
  const contents={on:(name,fn)=>hooks[name]=fn,isDestroyed:()=>false,isLoading:()=>loading,getURL:()=>url,executeJavaScriptInIsolatedWorld:async(...args)=>{calls.push(args);return 'fullscreen';}};
- const controller=createProviderFullscreen({getView:()=>({webContents:contents}),getProvider:()=> 'espn',canExpand:()=>available});
+ const controller=createProviderFullscreen({getView:()=>({webContents:contents}),getProvider:()=> provider,canExpand:()=>available});
  for(const bad of ['https://www.espn.com/watch/','https://auth.hulu.com/oauth2/login','https://www.espn.com/account','https://evil.example/watch/player/_/id/game']){url=bad;await controller.tick();}
  assert.equal(calls.length,0);
  url='https://www.espn.com/watch/player/_/id/game';loading=true;await controller.tick();loading=false;available=false;await controller.tick();available=true;assert.equal(calls.length,0);
  await controller.tick();assert.equal(calls.length,1);assert.equal(calls[0][0],1004);assert.equal(calls[0][2],true);
  url='https://www.espn.com/watch/player/_/id/game/startOption/live';await controller.tick();assert.match(calls.at(-1)[1][0].code,/startOption\/live/);
+ provider='hulu';url='https://www.hulu.com/live';await controller.tick();assert.match(calls.at(-1)[1][0].code,/hulu\.com\/live/);provider='espn';url='https://www.espn.com/watch/player/_/id/game/startOption/live';await controller.tick();
  hooks['before-input-event']({}, {type:'keyDown',key:'Escape'});await controller.tick();assert.match(calls.at(-1)[1][0].code,/,true\)/);
  hooks['did-navigate']();await controller.tick();assert.match(calls.at(-1)[1][0].code,/,false\)/);
  function fixture(){
