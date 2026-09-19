@@ -6,7 +6,7 @@ function resumeUrl(provider,value) {
   try {
     const u=new URL(value), home=new URL(HOMES[provider]);
     if(u.origin!==home.origin || u.username || u.password || u.port || u.pathname.length>1024) return null;
-    const routes={youtube:/^\/watch\/[a-zA-Z0-9_-]+\/?$/,hulu:/^\/(?:watch\/[a-zA-Z0-9_-]+|live-tv)\/?$/,peacock:/^\/watch\/playback\/(?:live|vod)\/[a-zA-Z0-9_/-]+$/,espn:/^\/watch\/player\/_\/id\/[a-zA-Z0-9_-]+(?:\/startOption\/live)?\/?$/};
+    const routes={youtube:/^\/watch\/[a-zA-Z0-9_-]+\/?$/,hulu:/^\/(?:watch\/[a-zA-Z0-9_-]+|live-tv|live)\/?$/,peacock:/^\/watch\/playback\/(?:live|vod)\/[a-zA-Z0-9_/-]+$/,espn:/^\/watch\/player\/_\/id\/[a-zA-Z0-9_-]+(?:\/startOption\/live)?\/?$/};
     if(!routes[provider]?.test(u.pathname)) return null;
     return u.origin+u.pathname;
   } catch {return null;}

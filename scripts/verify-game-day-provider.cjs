@@ -40,3 +40,8 @@ const polluted=createGameDayProvider({getConfig:()=>({gameDayProvider:'hulu',gam
 assert.equal(polluted.target(),HOMES.hulu,'invalid persisted routes never navigate');
 assert.match(main,/gameDayResumeUrls:null/,'unpair clears persisted destinations');
 assert.match(main,/did-navigate-in-page.*capturePlayback/,'SPA channel changes captured');
+
+assert.equal(resumeUrl('hulu','https://www.hulu.com/live?discard=secret#private'),'https://www.hulu.com/live');
+for(const bad of ['https://www.hulu.com/live/account','https://auth.hulu.com/live','https://www.hulu.com/liveness'])assert.equal(resumeUrl('hulu',bad),null);
+controller.choose('hulu');controller.capture('https://www.hulu.com/live');controller.choose('espn');assert.equal(controller.choose('hulu'),'https://www.hulu.com/live');
+assert.equal(createGameDayProvider({getConfig:()=>config,save(){}}).target(),'https://www.hulu.com/live');

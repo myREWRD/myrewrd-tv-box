@@ -1,5 +1,9 @@
 # myREWRD TV Box
 
+## 2.3.13 candidate: observed Hulu live page
+
+Physical 2.3.12 testing found Hulu's active live guide/player route is `/live`, with no channel query/hash. Its playing top-document video stayed in a mini-player because only `/live-tv` and `/watch/<id>` were recognized. Accept the exact `/live` path on the existing www.hulu.com HTTPS origin for fullscreen and local playback-page recall; continue rejecting suffix/account/auth-host variants and stripping queries/fragments. Hulu's selected channel on this generic live page remains provider-owned session state, so page restoration alone does not prove exact-channel or live-edge acceptance. No new origin or authentication scope is allowed. Physical verification is required before completion.
+
 ## 2.3.12 candidate: fullscreen geometry and provider restoration
 
 The provider view uses the actual fullscreen window content bounds and follows resize/fullscreen changes. Windows workAreaSize excludes the taskbar and previously left a gap before the sponsor strip (observed window 1280x720, work area 1280x672, provider height 632). The separate 6vh sponsor/ticker strip is preserved. Whole-picture fitting still requires narrow side bars for a 16:9 broadcast above that strip; no crop/stretch is introduced.
