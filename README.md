@@ -139,6 +139,10 @@ The portable extraction directory is deliberately versioned: myREWRD-TV-Box-1.0.
 
 ## Venue app provider remote (candidate)
 
+### 2.3.3 player audio correction
+
+Mute/Unmute now synchronizes the selected provider's top-document HTML video/audio elements (including open shadow roots) with Electron output mute. Saved YouTube embeds start muted; clearing only Electron mute did not enable their sound. Unmute preserves nonzero player volume and restores zero volume to 50%. It does not start paused media, change the Windows/TV volume, or access cross-origin child players. The fixed isolated script accepts only a boolean; the existing selected-view, authorization, loading and navigation checks remain. Both live and fallback remotes use this same handler. A signed box update is required; no mobile OTA or API change is needed. Physical audio acceptance remains separate from synthetic Chromium mute-state checks.
+
 See [provider remote setup and release gates](docs/PROVIDER_REMOTE.md). This source is not a fleet release.
 
 ## TV control 2.3.0 source contract (2026-09-18)

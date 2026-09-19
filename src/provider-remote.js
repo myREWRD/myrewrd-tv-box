@@ -1,5 +1,6 @@
 const PROVIDERS = { youtube: 'https://tv.youtube.com/', hulu: 'https://www.hulu.com/', peacock: 'https://www.peacocktv.com/', espn: 'https://www.espn.com/watch/' };
 const KEYS = ['Up', 'Down', 'Left', 'Right', 'Return', 'Tab', 'ShiftTab', 'Escape', 'Space'];
+const { mediaMuteCode } = require('./provider-audio');
 function providerPage(value) {
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port
     && ['youtube.com', 'hulu.com', 'peacocktv.com', 'espn.com'].some(h => u.hostname === h || u.hostname.endsWith(`.${h}`))
@@ -58,9 +59,18 @@ async function applyRemoteCommand(command, { getView, canControl, openProvider, 
       if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
       return 'applied';
     case 'reload': contents.reload(); return 'applied';
-    case 'mute':
+    case 'mute': {
       if (typeof command.muted !== 'boolean') return 'unavailable';
-      contents.setAudioMuted(command.muted); return 'applied';
+      const url = contents.getURL();
+      // Mute immediately at the output layer. Unmute only after clearing the
+      // player's separate mute flag (saved YouTube embeds start with mute=1).
+      if (command.muted) contents.setAudioMuted(true);
+      try { await contents.executeJavaScriptInIsolatedWorld(1003, [{ code: mediaMuteCode(command.muted) }], true); }
+      catch { return 'unavailable'; }
+      if (!canControl() || getView() !== view || contents.isDestroyed() || contents.isLoading() || contents.getURL() !== url) return 'unavailable';
+      contents.setAudioMuted(command.muted);
+      return 'applied';
+    }
     default: return 'unavailable';
   }
 }
