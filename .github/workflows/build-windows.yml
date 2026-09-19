@@ -65,6 +65,7 @@ jobs:
           node scripts/verify-protected-playback.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-wake-recovery.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-provider-fullscreen.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-remote-status.cjs
