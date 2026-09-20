@@ -57,6 +57,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       if (name === './presentation-key') return require('../src/presentation-key');
       if (name === './enrollment') return require('../src/enrollment');
       if (name === './live-remote') return { createLiveRemote: () => ({ tick: async () => {}, stop() {}, dispose() {} }) };
+      if (name === './provider-accounts') return { createProviderAccounts: () => ({active:false,tick:async()=>{},stop(){this.active=false;}}) };
       if (name === './game-day-url') return require('../src/game-day-url');
       if (name === './game-day-provider') return require('../src/game-day-provider');
       if (name === './provider-resume') return require('../src/provider-resume');

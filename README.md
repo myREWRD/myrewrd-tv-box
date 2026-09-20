@@ -1,5 +1,9 @@
 # myREWRD TV Box
 
+## Provider-account sign-in development (2026-09-20, unreleased)
+
+The new receiver polls a separate authenticated `/api/tv-provider-accounts` endpoint for one-shot, short-lived account jobs. It uses a hidden sandboxed provider window sharing this box's existing session, pauses live remote control, rejects duplicate jobs and stops on key/context changes. Credentials are transient and never written to config, logs or command receipts. Only the observed Hulu email/password forms are implemented; unknown verification steps require attention. A submitted form is not verified playback. The canonical dashboard `docs/security/TV_PROVIDER_ACCOUNTS.md` defines the vault and release gates. Package 2.3.14 is an unaccepted candidate; provisioning remains accepted 2.3.13 until validation and promotion.
+
 ## TV release and new-device provisioning must stay aligned
 
 Every approved production TV build/update is incomplete until the dashboard new-device and migration installer pins are updated to that same accepted version, ZIP SHA256 and setup-script SHA256. Publish immutable signed ZIP and versioned setup assets together; verify their public downloads, update provisioning tests and canonical release status in a companion PR, merge/deploy it, and run the published-release verifier. Never announce completion based only on a test-box OTA. ZIP-only, explicitly scoped canaries may remain newer while acceptance is pending; publishing a production setup script makes it subject to provisioning alignment. Do not silently overwrite a published version or promote an unaccepted candidate. A rollback must coordinate installer defaults and deployed-device offers and document the reason; do not remove release history to silence drift checks.

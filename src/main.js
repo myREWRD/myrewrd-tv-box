@@ -14,6 +14,7 @@ const { createEnrollment } = require("./enrollment");
 const { createRemoteStatus } = require("./remote-status");
 const { createProviderRemote, applyRemoteCommand } = require("./provider-remote");
 const { createLiveRemote } = require("./live-remote");
+const { createProviderAccounts } = require("./provider-accounts");
 const { gameDayUrl } = require("./game-day-url");
 const { createGameDayProvider, HOMES, resumeUrl } = require("./game-day-provider");
 const { createProtectedPlayback } = require("./protected-playback");
@@ -101,7 +102,7 @@ const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () =>
   canPoll: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)),
   apply: command => command?.type==='restart_app' ? requestRemoteRestart() : applyRemoteCommand(command, {
     getView: () => streamView,
-    canControl: () => currentMode === 'gameday' && !presentation.active && !providerWindows.size && !isUpdating,
+    canControl: () => currentMode === 'gameday' && !providerAccounts.active && !presentation.active && !providerWindows.size && !isUpdating,
     openProvider: (url, provider) => openGameDayProvider(provider), focus: () => mainWindow?.focus(),
   }),
 });
@@ -122,13 +123,18 @@ function requestRemoteRestart() {
 const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
   diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'live-remote-status.json'),JSON.stringify(record)),
   getToken:()=>config.tvToken, getKey:()=>presentationKey, getView:()=>streamView,
-  canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating),
+  canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !providerAccounts.active && !presentation.active && !providerWindows.size && !isUpdating),
   apply:(command, liveCurrent)=>applyRemoteCommand(command,{getView:()=>streamView,
-    canControl:()=>liveCurrent() && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating,
+    canControl:()=>liveCurrent() && currentMode==='gameday' && !providerAccounts.active && !presentation.active && !providerWindows.size && !isUpdating,
     openProvider:(url,provider)=>openGameDayProvider(provider),focus:()=>mainWindow?.focus()})
 });
 
+const providerAccounts=createProviderAccounts({BrowserWindow,apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+  canPoll:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size),
+  onPrivateStart:()=>{liveRemote.stop();providerResume.cancel();}});
+
 function restoreBoard() {
+  providerAccounts.stop();
   liveRemote.stop();
   providerRemote.stop();
   if (handoffRequested || (updateCandidate && !updateCandidate.active)) return;
@@ -258,6 +264,7 @@ function createMainWindow() {
 
 // ─── Mode Switching ─────────────────────────────────────────────────────────
 function switchMode(mode, options = {}) {
+  providerAccounts.stop();
   liveRemote.stop();
   providerResume.cancel();
   if (updateCandidate && !updateCandidate.active && mode !== "regular") return;
@@ -462,6 +469,7 @@ function startPolling() {
 }
 
 async function pollForCommands() {
+  void providerAccounts.tick();
   void providerRemote.tick();
   void remoteStatus.tick();
   presentation.tick();
@@ -607,6 +615,7 @@ async function checkForUpdate(latestVersion, downloadUrl, sha256) {
   if (compareVersions(APP_VERSION, latestVersion) <= 0) return;
   if (!/^[a-f0-9]{64}$/i.test(sha256 || "") || blockedVersion(INSTALL_DIR, latestVersion)) return;
   isUpdating = true;
+  providerAccounts.stop();
   try {
     const previousExe = Number(APP_VERSION.split(".")[0]) < 2 && process.env.PORTABLE_EXECUTABLE_FILE
       ? process.env.PORTABLE_EXECUTABLE_FILE : process.execPath;
@@ -678,6 +687,7 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
+      providerAccounts.stop();
       liveRemote.stop();
   providerRemote.stop();
       remoteStatus.stop();
@@ -735,6 +745,7 @@ app.whenReady().then(() => {
   powerMonitor.on("resume", () => recovery.schedule());
   powerMonitor.on("unlock-screen", () => recovery.schedule());
   powerMonitor.on("suspend", () => {
+    providerAccounts.stop();
     liveRemote.stop();
   providerRemote.stop();
     remoteStatus.stop();
@@ -749,6 +760,7 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  providerAccounts.stop();
   liveRemote.stop();
   providerRemote.stop();
   streamRequest++;
