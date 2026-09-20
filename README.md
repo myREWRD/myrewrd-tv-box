@@ -207,3 +207,7 @@ The main process supplies Electron process metrics creationTime (OS epoch millis
 ## Provider sign-in loading follow-up (unreleased)
 
 The Hulu runner no longer waits for every page subresource before inspecting its exact allowed form. Main-frame loading still gates injection, origin/path/form checks remain mandatory, and the loop leaves 12 seconds before job expiry for result reporting. This margin is not a separate timeout around JavaScript execution; the worker abort remains the final bound. Unit fixtures cover a never-settling full-load promise and a stalled main frame; the hidden Windows Electron fixture passed with synthetic forms and no provider network. This fixes a possible stall mechanism, not a proven physical timeout root cause. Actual Hulu acceptance and all other provider adapters remain pending. Published 2.3.14 is immutable; any next artifact needs a new version and must not be promoted without acceptance.
+
+### 2.3.15 candidate — provider acceptance pending
+The Hulu load-handling follow-up is packaged under a new immutable candidate version. Unit account, fullscreen and resume checks pass; this is not all-provider physical sign-in/playback acceptance. Keep accepted provisioning at 2.3.13 until the candidate passes the recorded hardware/provider gates and matching setup assets are published.
+
