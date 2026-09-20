@@ -80,3 +80,9 @@ Update this repository and the dashboard TV/operations documentation for command
 ## 2026-09-18 live remote transport
 
 The legacy command channel remains HTTP polling. TV Box 2.3.0 adds separate ephemeral WebRTC data channels for provider-only preview and live pointer input; authenticated HTTPS carries signaling and bounded leases. No WebSocket service or desktop remote is added. Read the canonical TV_LIVE_REMOTE.md contract before changing capture, signaling, input or privacy.
+
+## TV release and new-device provisioning must stay aligned
+
+Every approved production TV build/update is incomplete until the dashboard new-device and migration installer pins are updated to that same accepted version, ZIP SHA256 and setup-script SHA256. Publish immutable signed ZIP and versioned setup assets together; verify their public downloads, update provisioning tests and canonical release status in a companion PR, merge/deploy it, and run the published-release verifier. Never announce completion based only on a test-box OTA. ZIP-only, explicitly scoped canaries may remain newer while acceptance is pending; publishing a production setup script makes it subject to provisioning alignment. Do not silently overwrite a published version or promote an unaccepted candidate. A rollback must coordinate installer defaults and deployed-device offers and document the reason; do not remove release history to silence drift checks.
+
+Dashboard `scripts/verify-tv-provisioning-release.mjs` compares the pin with the newest published versioned setup asset and validates both asset digests plus the downloaded installer's checksum and embedded runtime version/hash. Provisioning CI runs on relevant PRs/main changes and daily; a failure is release drift to fix, not permission to auto-upgrade devices. Fleet OTA remains a separately scoped release decision.
