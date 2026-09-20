@@ -211,3 +211,6 @@ The Hulu runner no longer waits for every page subresource before inspecting its
 ### 2.3.15 candidate — provider acceptance pending
 The Hulu load-handling follow-up is packaged under a new immutable candidate version. Unit account, fullscreen and resume checks pass; this is not all-provider physical sign-in/playback acceptance. Keep accepted provisioning at 2.3.13 until the candidate passes the recorded hardware/provider gates and matching setup assets are published.
 
+
+Peacock candidate: protocol 2 adds exact observed top-level /start and /signin forms on www.peacocktv.com. Private sign-in remains hidden; challenge, unexpected navigation and location requests require attention. Synthetic Windows Chromium email/password steps pass for Hulu and Peacock. This is not physical sign-in acceptance; protocol 1 remains Hulu-only and the backend requires 2.3.15 for Peacock.
+

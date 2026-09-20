@@ -12,7 +12,7 @@ function createProviderAccounts({BrowserWindow,apiBase,getToken,getKey,canPoll,o
     let timeout=setTimeout(()=>controller.abort(),10000);let job;
     const validity=setInterval(()=>{if(!current())controller.abort();},100);
     try {
-      const response=await fetcher(`${apiBase}/api/tv-provider-accounts`,{method:'POST',headers,signal:controller.signal,redirect:'error',body:JSON.stringify({action:'poll',protocol:1})});
+      const response=await fetcher(`${apiBase}/api/tv-provider-accounts`,{method:'POST',headers,signal:controller.signal,redirect:'error',body:JSON.stringify({action:'poll',protocol:2})});
       if(!response.ok||!current())return;
       let raw=await response.text();if(raw.length>8192||!current())return;
       job=JSON.parse(raw).job;raw='';if(!validJob(job,now()))return;
@@ -23,7 +23,7 @@ function createProviderAccounts({BrowserWindow,apiBase,getToken,getKey,canPoll,o
       timeout=setTimeout(()=>controller.abort(),Math.max(1,Date.parse(job.expires_at)-now()-2000));
       const status=await login({BrowserWindow,job,signal:controller.signal,isCurrent:current,now});
       if(!current())return;
-      await fetcher(`${apiBase}/api/tv-provider-accounts`,{method:'POST',headers,signal:controller.signal,redirect:'error',body:JSON.stringify({action:'report',protocol:1,job_id:job.id,status})});
+      await fetcher(`${apiBase}/api/tv-provider-accounts`,{method:'POST',headers,signal:controller.signal,redirect:'error',body:JSON.stringify({action:'report',protocol:2,job_id:job.id,status})});
     }catch{/* No secret-bearing exception text and no automatic credential replay. */}
     finally {
       if(job?.credentials){job.credentials.username='';job.credentials.password='';}

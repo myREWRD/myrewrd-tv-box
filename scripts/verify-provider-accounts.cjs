@@ -3,16 +3,19 @@ const {createProviderAccounts}=require('../src/provider-accounts');
 const now=1000000;const makeJob=()=>({id:'11111111-1111-4111-8111-111111111111',provider:'hulu',expires_at:new Date(now+120000).toISOString(),credentials:{username:'fixture@example.invalid',password:'test-only-fixture'}});
 for(const url of ['http://auth.hulu.com/web/login','https://auth.hulu.com.evil.invalid/web/login','https://evil@auth.hulu.com/web/login','https://auth.hulu.com:444/web/login','https://auth.hulu.com/web/signup'])assert.equal(allowedLoginUrl(url),false);
 assert.equal(allowedLoginUrl('https://auth.hulu.com/web/login/enter-password'),true);
+assert.equal(allowedLoginUrl('https://www.peacocktv.com/signin','peacock'),true);
+for(const url of ['https://www.peacocktv.com.evil.invalid/signin','https://www.peacocktv.com/forgot','https://auth.hulu.com/web/login/enter-password','https://evil@www.peacocktv.com/signin'])assert.equal(allowedLoginUrl(url,'peacock'),false);
+assert.equal(validJob({...makeJob(),provider:'peacock'},now),true);
 assert.equal(validJob({...makeJob(),provider:'youtube'},now),false);assert.equal(validJob({...makeJob(),expires_at:new Date(now-1).toISOString()},now),false);
 assert.ok(credentialStepCode('password','";throw new Error("unsafe")').includes(JSON.stringify('";throw new Error("unsafe")')));
-let mode='normal',lastWindow,execCount=0,validContext=true,permissionChecks=[];
+let mode='normal',lastWindow,execCount=0,validContext=true,permissionChecks=[],rejectInitialLoad;
 class FakeWindow {
  constructor(options){assert.equal(options.show,false);assert.equal(options.webPreferences.nodeIntegration,false);assert.equal(options.webPreferences.sandbox,true);lastWindow=this;this.destroyed=false;let url='';this.webContents={
   setWindowOpenHandler:fn=>assert.equal(fn({url:'https://example.invalid'}).action,'deny'),on:()=>{},
   session:{setPermissionCheckHandler(fn){permissionChecks.push(fn);},setPermissionRequestHandler(fn){if(fn){assert.equal(permissionChecks.at(-1)(null),false);assert.equal(permissionChecks.at(-1)(thisWindow.webContents),false);assert.equal(permissionChecks.at(-1)({}),true);if(mode==='permission'){for(const wc of [null,thisWindow.webContents])fn(wc,'geolocation',allowed=>assert.equal(allowed,false));}}}},
-  loadURL:async next=>{url=mode==='wrong'?'https://attacker.invalid':next;if(mode==='pending-load')await new Promise(()=>{});},getURL:()=>url,isLoading:()=>mode==='pending-load',isLoadingMainFrame:()=>mode==='loading-main',
+  loadURL:async next=>{url=mode==='wrong'?'https://attacker.invalid':next;if(mode==='pending-load')await new Promise(()=>{});if(mode==='aborted-load')await new Promise((_resolve,reject)=>{rejectInitialLoad=reject;});},getURL:()=>url,isLoading:()=>mode==='pending-load',isLoadingMainFrame:()=>mode==='loading-main',
   executeJavaScriptInIsolatedWorld:async(world,scripts)=>{execCount++;assert.equal(world,1005);assert.ok(scripts[0].code.includes('location.origin'));
-   if(url.endsWith('enter-email')){url='https://auth.hulu.com/web/login/enter-password';if(mode==='rekey')validContext=false;}else url=mode==='challenge'?'https://auth.hulu.com/web/login/verification':'https://www.hulu.com/';return 'submitted';}};const thisWindow=this;
+   if(url.endsWith('enter-email')){url='https://auth.hulu.com/web/login/enter-password';if(mode==='aborted-load'){rejectInitialLoad(Error('ERR_ABORTED'));await new Promise(resolve=>setImmediate(resolve));}if(mode==='rekey')validContext=false;}else url=mode==='challenge'?'https://auth.hulu.com/web/login/verification':'https://www.hulu.com/';return 'submitted';}};const thisWindow=this;
  }
  isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;}
 }
@@ -21,6 +24,7 @@ class FakeWindow {
  assert.equal(execCount,2);assert.equal(lastWindow.destroyed,true);assert.equal(job.credentials.password,'');assert.equal(job.credentials.username,'');
  assert.equal(permissionChecks.at(-1),null);
  mode='pending-load';execCount=0;assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,now:()=>now,delay:async()=>{}}),'submitted');assert.equal(execCount,2);assert.equal(lastWindow.destroyed,true);
+ mode='aborted-load';execCount=0;assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,now:()=>now,delay:async()=>{}}),'submitted');assert.equal(execCount,2);
  mode='loading-main';execCount=0;let clock=now;assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,now:()=>clock,delay:async ms=>{clock+=ms;}}),'failed');assert.equal(execCount,0);assert.equal(clock,now+108000);assert.equal(lastWindow.destroyed,true);
  mode='permission';execCount=0;assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,now:()=>now,delay:async()=>{}}),'manual_required');assert.equal(execCount,0);assert.equal(permissionChecks.at(-1),null);
  mode='wrong';execCount=0;assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,now:()=>now,delay:async()=>{}}),'manual_required');assert.equal(execCount,0);

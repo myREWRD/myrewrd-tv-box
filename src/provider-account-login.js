@@ -1,19 +1,32 @@
 // Explicit, single-use sign-in delivery. Never persist credentials, export
 // cookies, accept a caller URL, or put a private sign-in window on the TV.
 const HULU_LOGIN='https://auth.hulu.com/web/login/enter-email';
-function allowedLoginUrl(value) {
-  try {const u=new URL(value);return !u.username&&!u.password&&!u.port&&u.origin==='https://auth.hulu.com'&&/^\/web\/login(?:\/|$)/.test(u.pathname);}catch{return false;}
+const PEACOCK_LOGIN='https://www.peacocktv.com/start';
+function allowedLoginUrl(value,provider='hulu') {
+  try {const u=new URL(value);return !u.username&&!u.password&&!u.port&&(provider==='peacock'
+    ?u.origin==='https://www.peacocktv.com'&&['/start','/signin'].includes(u.pathname)
+    :provider==='hulu'&&u.origin==='https://auth.hulu.com'&&/^\/web\/login(?:\/|$)/.test(u.pathname));}catch{return false;}
 }
 function validJob(job,now=Date.now()) {
-  return job&&/^[a-f0-9-]{36}$/i.test(job.id||'')&&job.provider==='hulu'
+  return job&&/^[a-f0-9-]{36}$/i.test(job.id||'')&&['hulu','peacock'].includes(job.provider)
     &&Date.parse(job.expires_at)>now&&Date.parse(job.expires_at)<=now+120000
     &&typeof job.credentials?.username==='string'&&job.credentials.username.length>0&&job.credentials.username.length<=320
     &&typeof job.credentials?.password==='string'&&job.credentials.password.length>0&&job.credentials.password.length<=1024;
 }
 // Exact form steps observed on the provider's official sign-in UI. Unknown
 // documents and forms receive no credentials, even on an allowed hostname.
-function credentialStepCode(step,value) {
+function credentialStepCode(step,value,provider='hulu',username='') {
   if(!['email','password'].includes(step))throw Error('Unsupported login step');
+  if(provider==='peacock')return `(() => {
+    if(location.origin!=='https://www.peacocktv.com'||location.pathname!==${JSON.stringify(step==='email'?'/start':'/signin')}||window!==window.top)return 'unsupported';
+    const field=document.querySelector(${JSON.stringify(step==='email'?'input#email[name="email"][type="text"]':'input#password[name="password"][type="password"]')});
+    const buttons=[...document.querySelectorAll('button[type="submit"]')].filter(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(step==='email'?'Continue':'Sign In')});
+    if(!field||!field.getClientRects().length||field.disabled||buttons.length!==1)return 'not_ready';
+    const set=(input,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));};
+    ${step==='password'?`const email=document.querySelector('input#userIdentifier[name="userIdentifier"][type="text"]');if(!email||!email.getClientRects().length||email.disabled)return 'unsupported';set(email,${JSON.stringify(username)});`:''}
+    set(field,${JSON.stringify(value)});
+    if(buttons[0].disabled)return 'not_ready';buttons[0].click();return 'submitted';
+  })()`;
   const selector=step==='email'?'input#email-field[type="email"]':'input#password[type="password"]';
   const button=step==='email'?'Continue':'Log In';
   return `(() => {
@@ -27,11 +40,14 @@ function credentialStepCode(step,value) {
     if(buttons[0].disabled)return 'unsupported';buttons[0].click();return 'submitted';
   })()`;
 }
-function playbackReturn(value) {
-  try {const u=new URL(value);return u.origin==='https://www.hulu.com'&&!u.username&&!u.password&&!u.port&&['/','/hub/home','/profiles'].includes(u.pathname);}catch{return false;}
+function playbackReturn(value,provider='hulu') {
+  try {const u=new URL(value);return !u.username&&!u.password&&!u.port&&(provider==='peacock'
+    ?u.origin==='https://www.peacocktv.com'&&['/watch/home','/watch/profiles'].includes(u.pathname)
+    :provider==='hulu'&&u.origin==='https://www.hulu.com'&&['/','/hub/home','/profiles'].includes(u.pathname));}catch{return false;}
 }
 async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Date.now,delay=ms=>new Promise(resolve=>setTimeout(resolve,ms))}) {
   if(!validJob(job,now())||signal.aborted||!isCurrent())return 'failed';
+  const provider=job.provider;
   let window;let privateSession;const attempted=new Set();let passwordSubmitted=false;
   try {
     window=new BrowserWindow({show:false,width:1000,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false}});
@@ -49,33 +65,35 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
     contents.setWindowOpenHandler(()=>({action:'deny'}));
     let denied=false;
     for(const eventName of ['will-navigate','will-redirect'])contents.on(eventName,(event,url)=>{
-      if(!allowedLoginUrl(url)&&!playbackReturn(url)){event.preventDefault();denied=true;}
+      if(!allowedLoginUrl(url,provider)&&!playbackReturn(url,provider)){event.preventDefault();denied=true;}
     });
     const abort=()=>{if(window&&!window.isDestroyed())window.destroy();};signal.addEventListener('abort',abort,{once:true});
     try {
       // A provider's analytics/subresource request can keep loadURL pending long
       // after its form is interactive. Observe navigation without awaiting full
       // page load; exact-document checks below still gate every credential.
-      let navigationFailed=false;
-      void contents.loadURL(HULU_LOGIN).catch(()=>{if(!attempted.size)navigationFailed=true;});
+      let navigationFailed=false,formInspectionStarted=false;
+      void contents.loadURL(provider==='peacock'?PEACOCK_LOGIN:HULU_LOGIN).catch(()=>{if(!formInspectionStarted)navigationFailed=true;});
       while(!signal.aborted&&isCurrent()&&!window.isDestroyed()&&now()<Date.parse(job.expires_at)-12000) {
         if(navigationFailed)return 'failed';
         if(denied)return 'manual_required';
         if(permissionRequested)return 'manual_required';
         const url=contents.getURL();
-        if(playbackReturn(url))return passwordSubmitted?'submitted':'manual_required';
+        if(playbackReturn(url,provider))return passwordSubmitted?'submitted':'manual_required';
         if(!url||url==='about:blank'){await delay(250);continue;}
-        if(!allowedLoginUrl(url))return 'manual_required';
+        if(!allowedLoginUrl(url,provider))return 'manual_required';
         if(contents.isLoadingMainFrame?.()){await delay(250);continue;}
         const pathname=new URL(url).pathname;
-        const step=pathname==='/web/login/enter-email'?'email':pathname==='/web/login/enter-password'?'password':null;
+        const step=provider==='peacock'?(pathname==='/start'?'email':pathname==='/signin'?'password':null):(pathname==='/web/login/enter-email'?'email':pathname==='/web/login/enter-password'?'password':null);
         if(!step)return 'verification_required';
         if(!attempted.has(step)) {
-          attempted.add(step);
           // Isolated code rechecks exact origin/path in the target document.
           if(!isCurrent()||signal.aborted)return 'failed';
           const value=step==='email'?job.credentials.username:job.credentials.password;
-          const result=await contents.executeJavaScriptInIsolatedWorld(1005,[{code:credentialStepCode(step,value)}],true);
+          formInspectionStarted=true;
+          const result=await contents.executeJavaScriptInIsolatedWorld(1005,[{code:credentialStepCode(step,value,provider,job.credentials.username)}],true);
+          if(result==='not_ready'){await delay(250);continue;}
+          attempted.add(step);
           if(result!=='submitted')return 'manual_required';
           if(step==='password')passwordSubmitted=true;
         }
@@ -90,4 +108,4 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
     if(privateSession){privateSession.setPermissionRequestHandler(null);privateSession.setPermissionCheckHandler(null);}
   }
 }
-module.exports={HULU_LOGIN,allowedLoginUrl,validJob,credentialStepCode,playbackReturn,runHuluLogin};
+module.exports={HULU_LOGIN,PEACOCK_LOGIN,allowedLoginUrl,validJob,credentialStepCode,playbackReturn,runHuluLogin};
