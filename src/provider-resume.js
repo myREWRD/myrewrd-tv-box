@@ -2,7 +2,7 @@ const {resumeUrl}=require('./game-day-provider');
 
 // Arm before dispatching effects: trusted input invalidates even queued commands.
 function armResume(expectedPage,id,deadline) {
-  if(location.origin+location.pathname!==expectedPage || Date.now()>deadline)return false;
+  if((location.origin+location.pathname+(location.origin==='https://www.youtube.com' && location.pathname==='/watch'?'?v='+new URLSearchParams(location.search).get('v'):''))!==expectedPage || Date.now()>deadline)return false;
   let state=globalThis.myrewrdResumeState;
   if(!state){
     state=globalThis.myrewrdResumeState={};
@@ -14,9 +14,9 @@ function armResume(expectedPage,id,deadline) {
 // Do not await media.play(): media startup can remain pending indefinitely.
 function resumePlayback(expectedPage,id,deadline) {
   const state=globalThis.myrewrdResumeState;
-  const valid=()=>state?.id===id && !state.cancelled && Date.now()<=deadline && location.origin+location.pathname===expectedPage;
+  const valid=()=>state?.id===id && !state.cancelled && Date.now()<=deadline && (location.origin+location.pathname+(location.origin==='https://www.youtube.com' && location.pathname==='/watch'?'?v='+new URLSearchParams(location.search).get('v'):''))===expectedPage;
   if(!valid())return 'cancelled';
-  if(location.origin+location.pathname!==expectedPage)return 'navigation';
+  if((location.origin+location.pathname+(location.origin==='https://www.youtube.com' && location.pathname==='/watch'?'?v='+new URLSearchParams(location.search).get('v'):''))!==expectedPage)return 'navigation';
   if([...document.querySelectorAll('input[type="password"],input[type="email"],input[autocomplete="username"],input[autocomplete="one-time-code"]')].some(e=>e.getClientRects().length))return 'sign-in';
   const videos=[...document.querySelectorAll('video')].filter(v=>{
     const r=v.getBoundingClientRect();return !v.ended && Boolean(v.currentSrc || v.src || v.querySelector('source')) && r.width>=200 && r.height>=100;

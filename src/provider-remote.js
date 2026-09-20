@@ -1,4 +1,4 @@
-const PROVIDERS = { youtube: 'https://tv.youtube.com/', hulu: 'https://www.hulu.com/', peacock: 'https://www.peacocktv.com/', espn: 'https://www.espn.com/watch/' };
+const PROVIDERS = { youtube: 'https://tv.youtube.com/', youtube_video:'https://www.youtube.com/', hulu: 'https://www.hulu.com/', peacock: 'https://www.peacocktv.com/', espn: 'https://www.espn.com/watch/' };
 const KEYS = ['Up', 'Down', 'Left', 'Right', 'Return', 'Tab', 'ShiftTab', 'Escape', 'Space'];
 const { mediaMuteCode } = require('./provider-audio');
 function providerPage(value) {

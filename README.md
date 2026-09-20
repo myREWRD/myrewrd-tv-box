@@ -214,3 +214,7 @@ The Hulu load-handling follow-up is packaged under a new immutable candidate ver
 
 Peacock candidate: protocol 2 adds exact observed top-level /start and /signin forms on www.peacocktv.com. Private sign-in remains hidden; challenge, unexpected navigation and location requests require attention. Synthetic Windows Chromium email/password steps pass for Hulu and Peacock. This is not physical sign-in acceptance; protocol 1 remains Hulu-only and the backend requires 2.3.15 for Peacock.
 
+
+### 2.3.16 candidate
+
+Adds separate YouTube / NFL Sunday Ticket destination (existing youtube remains YouTube TV), sanitized video-ID restoration, and ephemeral ordinary-field keyboard input in the live remote. Private sign-in pages remain excluded. Fixed non-sensitive sign-in failure reasons aid Peacock diagnosis; real Peacock acceptance is pending. This candidate does not change accepted provisioning until physical acceptance and companion pin alignment.

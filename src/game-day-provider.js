@@ -1,4 +1,4 @@
-const HOMES = Object.freeze({youtube:'https://tv.youtube.com/',hulu:'https://www.hulu.com/',peacock:'https://www.peacocktv.com/',espn:'https://www.espn.com/watch/'});
+const HOMES = Object.freeze({youtube:'https://tv.youtube.com/',youtube_video:'https://www.youtube.com/',hulu:'https://www.hulu.com/',peacock:'https://www.peacocktv.com/',espn:'https://www.espn.com/watch/'});
 function providerId(value) { return Object.hasOwn(HOMES,value) ? value : null; }
 // Only allowlisted playback routes are retained in the local paired-device config. Never retain sign-in redirects,
 // arbitrary navigation, query tokens, account paths, or provider cookies here.
@@ -6,6 +6,11 @@ function resumeUrl(provider,value) {
   try {
     const u=new URL(value), home=new URL(HOMES[provider]);
     if(u.origin!==home.origin || u.username || u.password || u.port || u.pathname.length>1024) return null;
+    if(provider==='youtube_video') {
+      if(/^\/live\/[\w-]{11}$/.test(u.pathname))return u.origin+u.pathname;
+      const ids=u.searchParams.getAll('v');
+      return u.pathname==='/watch' && ids.length===1 && /^[\w-]{11}$/.test(ids[0]) ? u.origin+'/watch?v='+ids[0] : null;
+    }
     const routes={youtube:/^\/watch\/[a-zA-Z0-9_-]+\/?$/,hulu:/^\/(?:watch\/[a-zA-Z0-9_-]+|live-tv|live)\/?$/,peacock:/^\/watch\/playback\/(?:live|vod)\/[a-zA-Z0-9_/-]+$/,espn:/^\/watch\/player\/_\/id\/[a-zA-Z0-9_-]+(?:\/startOption\/live)?\/?$/};
     if(!routes[provider]?.test(u.pathname)) return null;
     return u.origin+u.pathname;

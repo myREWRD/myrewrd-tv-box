@@ -45,9 +45,10 @@ function playbackReturn(value,provider='hulu') {
     ?u.origin==='https://www.peacocktv.com'&&['/watch/home','/watch/profiles'].includes(u.pathname)
     :provider==='hulu'&&u.origin==='https://www.hulu.com'&&['/','/hub/home','/profiles'].includes(u.pathname));}catch{return false;}
 }
-async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Date.now,delay=ms=>new Promise(resolve=>setTimeout(resolve,ms))}) {
+async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Date.now,delay=ms=>new Promise(resolve=>setTimeout(resolve,ms)),diagnose=()=>{}}) {
   if(!validJob(job,now())||signal.aborted||!isCurrent())return 'failed';
   const provider=job.provider;
+  const finish=(status,reason)=>{diagnose(reason);return status;};
   let window;let privateSession;const attempted=new Set();let passwordSubmitted=false;
   try {
     window=new BrowserWindow({show:false,width:1000,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false}});
@@ -75,17 +76,17 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
       let navigationFailed=false,formInspectionStarted=false;
       void contents.loadURL(provider==='peacock'?PEACOCK_LOGIN:HULU_LOGIN).catch(()=>{if(!formInspectionStarted)navigationFailed=true;});
       while(!signal.aborted&&isCurrent()&&!window.isDestroyed()&&now()<Date.parse(job.expires_at)-12000) {
-        if(navigationFailed)return 'failed';
-        if(denied)return 'manual_required';
-        if(permissionRequested)return 'manual_required';
+        if(navigationFailed)return finish('failed','navigation_failed');
+        if(denied)return finish('manual_required','redirect_blocked');
+        if(permissionRequested)return finish('manual_required','permission_required');
         const url=contents.getURL();
-        if(playbackReturn(url,provider))return passwordSubmitted?'submitted':'manual_required';
+        if(playbackReturn(url,provider))return finish(passwordSubmitted?'submitted':'manual_required',passwordSubmitted?'password_submitted':'existing_session');
         if(!url||url==='about:blank'){await delay(250);continue;}
-        if(!allowedLoginUrl(url,provider))return 'manual_required';
+        if(!allowedLoginUrl(url,provider))return finish('manual_required','document_blocked');
         if(contents.isLoadingMainFrame?.()){await delay(250);continue;}
         const pathname=new URL(url).pathname;
         const step=provider==='peacock'?(pathname==='/start'?'email':pathname==='/signin'?'password':null):(pathname==='/web/login/enter-email'?'email':pathname==='/web/login/enter-password'?'password':null);
-        if(!step)return 'verification_required';
+        if(!step)return finish('verification_required','verification_step');
         if(!attempted.has(step)) {
           // Isolated code rechecks exact origin/path in the target document.
           if(!isCurrent()||signal.aborted)return 'failed';
@@ -94,14 +95,14 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
           const result=await contents.executeJavaScriptInIsolatedWorld(1005,[{code:credentialStepCode(step,value,provider,job.credentials.username)}],true);
           if(result==='not_ready'){await delay(250);continue;}
           attempted.add(step);
-          if(result!=='submitted')return 'manual_required';
+          if(result!=='submitted')return finish('manual_required','form_changed');
           if(step==='password')passwordSubmitted=true;
         }
         await delay(500);
       }
-      return 'failed';
+      return finish('failed','attempt_expired');
     }finally{signal.removeEventListener('abort',abort);}
-  }catch{return 'failed';}
+  }catch{return finish('failed','receiver_error');}
   finally {
     job.credentials.username='';job.credentials.password='';
     if(window&&!window.isDestroyed())window.destroy();

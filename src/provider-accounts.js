@@ -21,9 +21,10 @@ function createProviderAccounts({BrowserWindow,apiBase,getToken,getKey,canPoll,o
       seen.set(job.id,Date.parse(job.expires_at));
       active=true;onPrivateStart();clearTimeout(timeout);
       timeout=setTimeout(()=>controller.abort(),Math.max(1,Date.parse(job.expires_at)-now()-2000));
-      const status=await login({BrowserWindow,job,signal:controller.signal,isCurrent:current,now});
+      let reason;
+      const status=await login({BrowserWindow,job,signal:controller.signal,isCurrent:current,now,diagnose:value=>{if(['navigation_failed','redirect_blocked','permission_required','password_submitted','existing_session','document_blocked','verification_step','form_changed','attempt_expired','receiver_error'].includes(value))reason=value;}});
       if(!current())return;
-      await fetcher(`${apiBase}/api/tv-provider-accounts`,{method:'POST',headers,signal:controller.signal,redirect:'error',body:JSON.stringify({action:'report',protocol:2,job_id:job.id,status})});
+      await fetcher(`${apiBase}/api/tv-provider-accounts`,{method:'POST',headers,signal:controller.signal,redirect:'error',body:JSON.stringify({action:'report',protocol:2,job_id:job.id,status,...(reason?{reason}:{})})});
     }catch{/* No secret-bearing exception text and no automatic credential replay. */}
     finally {
       if(job?.credentials){job.credentials.username='';job.credentials.password='';}

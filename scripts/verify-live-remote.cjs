@@ -33,7 +33,7 @@ function fixture() {
   }
   const source = fs.readFileSync(path.join(__dirname, '../src/live-remote.js'), 'utf8');
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'),
-    require: name => name === 'perf_hooks' ? { performance: { now: () => now } } : name === './provider-remote' ? require('../src/provider-remote') : name === './preview-frame-visibility' ? {hiddenChildFramesCode} : require(name),
+    require: name => name === 'perf_hooks' ? { performance: { now: () => now } } : name === './provider-remote' ? require('../src/provider-remote') : name === './provider-keyboard' ? require('../src/provider-keyboard') : name === './preview-frame-visibility' ? {hiddenChildFramesCode} : require(name),
     URL, AbortSignal, Buffer, setInterval: fn => { timers.add(fn); return fn; }, clearInterval: fn => timers.delete(fn),
   };
   vm.runInNewContext(source, context);

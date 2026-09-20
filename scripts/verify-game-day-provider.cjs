@@ -45,3 +45,12 @@ assert.equal(resumeUrl('hulu','https://www.hulu.com/live?discard=secret#private'
 for(const bad of ['https://www.hulu.com/live/account','https://auth.hulu.com/live','https://www.hulu.com/liveness'])assert.equal(resumeUrl('hulu',bad),null);
 controller.choose('hulu');controller.capture('https://www.hulu.com/live');controller.choose('espn');assert.equal(controller.choose('hulu'),'https://www.hulu.com/live');
 assert.equal(createGameDayProvider({getConfig:()=>config,save(){}}).target(),'https://www.hulu.com/live');
+
+assert.equal(HOMES.youtube,'https://tv.youtube.com/');
+assert.equal(HOMES.youtube_video,'https://www.youtube.com/');
+assert.equal(resumeUrl('youtube_video','https://www.youtube.com/watch?v=1FwetWkAkdc&token=private#fragment'),'https://www.youtube.com/watch?v=1FwetWkAkdc');
+assert.equal(resumeUrl('youtube_video','https://www.youtube.com/watch?v=1FwetWkAkdc&v=aaaaaaaaaaa'),null);
+assert.equal(resumeUrl('youtube_video','https://www.youtube.com/live/1FwetWkAkdc?secret=x'),'https://www.youtube.com/live/1FwetWkAkdc');
+assert.equal(resumeUrl('youtube','https://www.youtube.com/watch?v=1FwetWkAkdc'),null);
+assert.equal(resumeUrl('youtube_video','https://tv.youtube.com/watch/test'),null);
+assert.equal(resumeUrl('youtube_video','https://www.youtube.com/account?v=1FwetWkAkdc'),null);

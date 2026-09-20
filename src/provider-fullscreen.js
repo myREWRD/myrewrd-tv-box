@@ -3,7 +3,7 @@ const { resumeUrl } = require('./game-day-provider');
 // Runs only in the selected provider's isolated world, never in sign-in popups.
 // Prefer the provider's own fullscreen button so its transport controls remain.
 async function enterPlayerFullscreen(expectedPage, userDismissed = false) {
-  if (location.origin + location.pathname !== expectedPage) return 'navigation';
+  if ((location.origin+location.pathname+(location.origin==='https://www.youtube.com' && location.pathname==='/watch'?'?v='+new URLSearchParams(location.search).get('v'):'')) !== expectedPage) return 'navigation';
   if ([...document.querySelectorAll('input[type="password"],input[type="email"],input[autocomplete="username"],input[autocomplete="one-time-code"]')].some(element=>element.getClientRects().length>0)) return 'sign-in';
   const videos = [...document.querySelectorAll('video')].filter(video => {
     const r = video.getBoundingClientRect();
