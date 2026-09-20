@@ -218,3 +218,7 @@ Peacock candidate: protocol 2 adds exact observed top-level /start and /signin f
 ### 2.3.16 candidate
 
 Adds separate YouTube / NFL Sunday Ticket destination (existing youtube remains YouTube TV), sanitized video-ID restoration, and ephemeral ordinary-field keyboard input in the live remote. Private sign-in pages remain excluded. Fixed non-sensitive sign-in failure reasons aid Peacock diagnosis; real Peacock acceptance is pending. This candidate does not change accepted provisioning until physical acceptance and companion pin alignment.
+
+## 2026-09-20 provider sign-in recovery candidate 2.3.17
+
+Peacock password submission recognizes the observed same-form Sign In button with HTML default submit type, as well as an explicit submit type. Exact origins, paths, field identities and visible unique button checks remain required. The login deadline cancels and destroys its hidden window before the report deadline; idempotent synchronous cleanup prevents late script completion from clearing a later attempt’s permission handlers. Timeout reports retain a bounded live request and never replay credentials. Windows synthetic default-submit Peacock and native timeout/late-cleanup regressions pass. Physical saved-account sign-in and playback remain acceptance gates; no provisioning promotion is implied.

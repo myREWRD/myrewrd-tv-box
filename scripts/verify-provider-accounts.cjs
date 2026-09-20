@@ -8,13 +8,13 @@ for(const url of ['https://www.peacocktv.com.evil.invalid/signin','https://www.p
 assert.equal(validJob({...makeJob(),provider:'peacock'},now),true);
 assert.equal(validJob({...makeJob(),provider:'youtube'},now),false);assert.equal(validJob({...makeJob(),expires_at:new Date(now-1).toISOString()},now),false);
 assert.ok(credentialStepCode('password','";throw new Error("unsafe")').includes(JSON.stringify('";throw new Error("unsafe")')));
-let mode='normal',lastWindow,execCount=0,validContext=true,permissionChecks=[],rejectInitialLoad;
+let mode='normal',lastWindow,execCount=0,validContext=true,permissionChecks=[],rejectInitialLoad,resolveExecution;
 class FakeWindow {
  constructor(options){assert.equal(options.show,false);assert.equal(options.webPreferences.nodeIntegration,false);assert.equal(options.webPreferences.sandbox,true);lastWindow=this;this.destroyed=false;let url='';this.webContents={
   setWindowOpenHandler:fn=>assert.equal(fn({url:'https://example.invalid'}).action,'deny'),on:()=>{},
   session:{setPermissionCheckHandler(fn){permissionChecks.push(fn);},setPermissionRequestHandler(fn){if(fn){assert.equal(permissionChecks.at(-1)(null),false);assert.equal(permissionChecks.at(-1)(thisWindow.webContents),false);assert.equal(permissionChecks.at(-1)({}),true);if(mode==='permission'){for(const wc of [null,thisWindow.webContents])fn(wc,'geolocation',allowed=>assert.equal(allowed,false));}}}},
   loadURL:async next=>{url=mode==='wrong'?'https://attacker.invalid':next;if(mode==='pending-load')await new Promise(()=>{});if(mode==='aborted-load')await new Promise((_resolve,reject)=>{rejectInitialLoad=reject;});},getURL:()=>url,isLoading:()=>mode==='pending-load',isLoadingMainFrame:()=>mode==='loading-main',
-  executeJavaScriptInIsolatedWorld:async(world,scripts)=>{execCount++;assert.equal(world,1005);assert.ok(scripts[0].code.includes('location.origin'));
+  executeJavaScriptInIsolatedWorld:async(world,scripts)=>{if(mode==='pending-script')return await new Promise(resolve=>{resolveExecution=resolve;});execCount++;assert.equal(world,1005);assert.ok(scripts[0].code.includes('location.origin'));
    if(url.endsWith('enter-email')){url='https://auth.hulu.com/web/login/enter-password';if(mode==='aborted-load'){rejectInitialLoad(Error('ERR_ABORTED'));await new Promise(resolve=>setImmediate(resolve));}if(mode==='rekey')validContext=false;}else url=mode==='challenge'?'https://auth.hulu.com/web/login/verification':'https://www.hulu.com/';return 'submitted';}};const thisWindow=this;
  }
  isDestroyed(){return this.destroyed;}destroy(){this.destroyed=true;}
@@ -30,6 +30,12 @@ class FakeWindow {
  mode='wrong';execCount=0;assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,now:()=>now,delay:async()=>{}}),'manual_required');assert.equal(execCount,0);
  mode='challenge';assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,now:()=>now,delay:async()=>{}}),'verification_required');assert.equal(lastWindow.destroyed,true);
  mode='rekey';execCount=0;assert.equal(await runHuluLogin({BrowserWindow:FakeWindow,job:makeJob(),signal:new AbortController().signal,isCurrent:()=>validContext,now:()=>now,delay:async()=>{}}),'failed');assert.equal(execCount,1);assert.equal(lastWindow.destroyed,true);
+ mode='pending-script';validContext=true;const cancelPending=new AbortController();const pendingJob=makeJob();
+ const pendingLogin=runHuluLogin({BrowserWindow:FakeWindow,job:pendingJob,signal:cancelPending.signal,now:()=>now});
+ await new Promise(resolve=>setImmediate(resolve));cancelPending.abort();assert.equal(lastWindow.destroyed,true);assert.equal(pendingJob.credentials.password,'');assert.equal(permissionChecks.at(-1),null);
+ // Simulate a new attempt owning the session before old execution settles.
+ const nextPermissionOwner=()=>false;permissionChecks.push(nextPermissionOwner);resolveExecution('submitted');await pendingLogin;assert.equal(permissionChecks.at(-1),nextPermissionOwner,'late cleanup cannot clear a newer permission owner');
+ mode='normal';
  let polls=0,logins=0,privateStarts=0,reports=[];job=makeJob();
  const worker=createProviderAccounts({BrowserWindow:FakeWindow,apiBase:'https://example.invalid',getToken:()=> 'test-token',getKey:()=> 'test-key',canPoll:()=>true,onPrivateStart:()=>privateStarts++,now:()=>now,
   fetcher:async(url,options)=>{const body=JSON.parse(options.body);if(body.action==='report'){reports.push(body);return {ok:true};}polls++;return {ok:true,text:async()=>JSON.stringify({job})};},
@@ -39,5 +45,13 @@ class FakeWindow {
  const rekeyWorker=createProviderAccounts({BrowserWindow:FakeWindow,apiBase:'https://example.invalid',getToken:()=> 'test-token',getKey:()=>key,canPoll:()=>true,onPrivateStart:()=>{},now:()=>now,
  fetcher:async()=>({ok:true,text:async()=>JSON.stringify({job:makeJob()})}),login:async({signal})=>{key='second';await new Promise(resolve=>signal.addEventListener('abort',()=>{aborted=true;resolve();},{once:true}));return 'failed';}});
  await rekeyWorker.tick();assert.equal(aborted,true);assert.equal(rekeyWorker.active,false);
+ // A provider injection may never settle. Its private surface must be closed
+ // before the lock releases, while reporting retains its own live signal.
+ let privateClosed=false,lateResolve,timeoutReports=[];
+ const deadlineWorker=createProviderAccounts({BrowserWindow:FakeWindow,apiBase:'https://example.invalid',getToken:()=> 'test-token',getKey:()=> 'test-key',canPoll:()=>true,onPrivateStart:()=>{},
+ fetcher:async(_url,options)=>{const body=JSON.parse(options.body);if(body.action==='report'){assert.equal(privateClosed,true);assert.equal(options.signal.aborted,false);timeoutReports.push(body);return {ok:true};}return {ok:true,text:async()=>JSON.stringify({job:{...makeJob(),expires_at:new Date(Date.now()+12040).toISOString()}})};},
+ login:({signal})=>new Promise(resolve=>{lateResolve=resolve;signal.addEventListener('abort',()=>{privateClosed=true;},{once:true});})});
+ await deadlineWorker.tick();assert.equal(deadlineWorker.active,false);assert.deepEqual(timeoutReports.map(({status,reason})=>({status,reason})),[{status:'failed',reason:'attempt_expired'}]);
+ lateResolve('submitted');await new Promise(resolve=>setImmediate(resolve));assert.equal(timeoutReports.length,1);
  console.log('PASS provider accounts: exact origins, bounded jobs, hidden sandboxed window, fixed email/password steps, challenge refusal, cleanup, private lock and no credential replay/report leakage.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

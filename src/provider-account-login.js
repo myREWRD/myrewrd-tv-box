@@ -20,7 +20,7 @@ function credentialStepCode(step,value,provider='hulu',username='') {
   if(provider==='peacock')return `(() => {
     if(location.origin!=='https://www.peacocktv.com'||location.pathname!==${JSON.stringify(step==='email'?'/start':'/signin')}||window!==window.top)return 'unsupported';
     const field=document.querySelector(${JSON.stringify(step==='email'?'input#email[name="email"][type="text"]':'input#password[name="password"][type="password"]')});
-    const buttons=[...document.querySelectorAll('button[type="submit"]')].filter(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(step==='email'?'Continue':'Sign In')});
+    const buttons=[...(field?.closest('form')?.querySelectorAll('button')||[])].filter(b=>b.type==='submit'&&b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(step==='email'?'Continue':'Sign In')});
     if(!field||!field.getClientRects().length||field.disabled||buttons.length!==1)return 'not_ready';
     const set=(input,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));};
     ${step==='password'?`const email=document.querySelector('input#userIdentifier[name="userIdentifier"][type="text"]');if(!email||!email.getClientRects().length||email.disabled)return 'unsupported';set(email,${JSON.stringify(username)});`:''}
@@ -50,6 +50,13 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
   const provider=job.provider;
   const finish=(status,reason)=>{diagnose(reason);return status;};
   let window;let privateSession;const attempted=new Set();let passwordSubmitted=false;
+  let cleaned=false;
+  const cleanup=()=>{
+    if(cleaned)return;cleaned=true;
+    if(window&&!window.isDestroyed())window.destroy();
+    if(privateSession){privateSession.setPermissionRequestHandler(null);privateSession.setPermissionCheckHandler(null);}
+    job.credentials.username='';job.credentials.password='';
+  };
   try {
     window=new BrowserWindow({show:false,width:1000,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false}});
     const contents=window.webContents;
@@ -68,7 +75,7 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
     for(const eventName of ['will-navigate','will-redirect'])contents.on(eventName,(event,url)=>{
       if(!allowedLoginUrl(url,provider)&&!playbackReturn(url,provider)){event.preventDefault();denied=true;}
     });
-    const abort=()=>{if(window&&!window.isDestroyed())window.destroy();};signal.addEventListener('abort',abort,{once:true});
+    const abort=cleanup;signal.addEventListener('abort',abort,{once:true});
     try {
       // A provider's analytics/subresource request can keep loadURL pending long
       // after its form is interactive. Observe navigation without awaiting full
@@ -104,9 +111,7 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
     }finally{signal.removeEventListener('abort',abort);}
   }catch{return finish('failed','receiver_error');}
   finally {
-    job.credentials.username='';job.credentials.password='';
-    if(window&&!window.isDestroyed())window.destroy();
-    if(privateSession){privateSession.setPermissionRequestHandler(null);privateSession.setPermissionCheckHandler(null);}
+    cleanup();
   }
 }
 module.exports={HULU_LOGIN,PEACOCK_LOGIN,allowedLoginUrl,validJob,credentialStepCode,playbackReturn,runHuluLogin};

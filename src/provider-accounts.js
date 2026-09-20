@@ -21,8 +21,33 @@ function createProviderAccounts({BrowserWindow,apiBase,getToken,getKey,canPoll,o
       seen.set(job.id,Date.parse(job.expires_at));
       active=true;onPrivateStart();clearTimeout(timeout);
       timeout=setTimeout(()=>controller.abort(),Math.max(1,Date.parse(job.expires_at)-now()-2000));
-      let reason;
-      const status=await login({BrowserWindow,job,signal:controller.signal,isCurrent:current,now,diagnose:value=>{if(['navigation_failed','redirect_blocked','permission_required','password_submitted','existing_session','document_blocked','verification_step','form_changed','attempt_expired','receiver_error'].includes(value))reason=value;}});
+      // Keep the delivery lifetime separate from the private browser deadline.
+      // Electron script execution can wait indefinitely for a provider page to
+      // finish loading. Abort destroys that window synchronously, then leaves
+      // time to report the outcome without replaying its credentials.
+      const loginController=new AbortController();
+      let reason,deadline,abortLogin;
+      const cancelled=Symbol('cancelled');
+      const deadlineResult=Symbol('deadline');
+      const stopped=new Promise(resolve=>{
+        abortLogin=()=>{loginController.abort();resolve(cancelled);};
+        controller.signal.addEventListener('abort',abortLogin,{once:true});
+        deadline=setTimeout(()=>{loginController.abort();resolve(deadlineResult);},Math.max(1,Date.parse(job.expires_at)-now()-12000));
+      });
+      let status;
+      try {
+        const outcome=await Promise.race([
+          Promise.resolve().then(()=>login({BrowserWindow,job,signal:loginController.signal,isCurrent:()=>current()&&!loginController.signal.aborted,now,diagnose:value=>{if(['navigation_failed','redirect_blocked','permission_required','password_submitted','existing_session','document_blocked','verification_step','form_changed','attempt_expired','receiver_error'].includes(value))reason=value;}})).catch(()=>{reason='receiver_error';return 'failed';}),
+          stopped,
+        ]);
+        if(outcome===cancelled)return;
+        if(outcome===deadlineResult){reason='attempt_expired';status='failed';}
+        else status=outcome;
+      }finally{
+        clearTimeout(deadline);
+        controller.signal.removeEventListener('abort',abortLogin);
+        loginController.abort();
+      }
       if(!current())return;
       await fetcher(`${apiBase}/api/tv-provider-accounts`,{method:'POST',headers,signal:controller.signal,redirect:'error',body:JSON.stringify({action:'report',protocol:2,job_id:job.id,status,...(reason?{reason}:{})})});
     }catch{/* No secret-bearing exception text and no automatic credential replay. */}
