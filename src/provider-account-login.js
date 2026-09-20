@@ -53,14 +53,20 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
     });
     const abort=()=>{if(window&&!window.isDestroyed())window.destroy();};signal.addEventListener('abort',abort,{once:true});
     try {
-      await contents.loadURL(HULU_LOGIN);
-      while(!signal.aborted&&isCurrent()&&!window.isDestroyed()&&now()<Date.parse(job.expires_at)-3000) {
+      // A provider's analytics/subresource request can keep loadURL pending long
+      // after its form is interactive. Observe navigation without awaiting full
+      // page load; exact-document checks below still gate every credential.
+      let navigationFailed=false;
+      void contents.loadURL(HULU_LOGIN).catch(()=>{if(!attempted.size)navigationFailed=true;});
+      while(!signal.aborted&&isCurrent()&&!window.isDestroyed()&&now()<Date.parse(job.expires_at)-12000) {
+        if(navigationFailed)return 'failed';
         if(denied)return 'manual_required';
         if(permissionRequested)return 'manual_required';
         const url=contents.getURL();
         if(playbackReturn(url))return passwordSubmitted?'submitted':'manual_required';
+        if(!url||url==='about:blank'){await delay(250);continue;}
         if(!allowedLoginUrl(url))return 'manual_required';
-        if(contents.isLoading()){await delay(250);continue;}
+        if(contents.isLoadingMainFrame?.()){await delay(250);continue;}
         const pathname=new URL(url).pathname;
         const step=pathname==='/web/login/enter-email'?'email':pathname==='/web/login/enter-password'?'password':null;
         if(!step)return 'verification_required';

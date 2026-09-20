@@ -203,3 +203,7 @@ Physical diagnosis found ESPN Watch Live navigates to `/watch/player/_/id/<id>/s
 ### 2.3.11 updater process identity
 
 The main process supplies Electron process metrics creationTime (OS epoch milliseconds) to the update supervisor instead of estimating start time from Node uptime. A physical 2.3.9 to 2.3.10 update stopped safely because its estimate differed by 5430 ms from Windows, exceeding the unchanged 5000 ms identity tolerance. Missing/mismatched metrics fail closed. PID, executable hashes, supervisor timestamp tolerance and rollback remain unchanged.
+
+## Provider sign-in loading follow-up (unreleased)
+
+The Hulu runner no longer waits for every page subresource before inspecting its exact allowed form. Main-frame loading still gates injection, origin/path/form checks remain mandatory, and the loop leaves 12 seconds before job expiry for result reporting. This margin is not a separate timeout around JavaScript execution; the worker abort remains the final bound. Unit fixtures cover a never-settling full-load promise and a stalled main frame; the hidden Windows Electron fixture passed with synthetic forms and no provider network. This fixes a possible stall mechanism, not a proven physical timeout root cause. Actual Hulu acceptance and all other provider adapters remain pending. Published 2.3.14 is immutable; any next artifact needs a new version and must not be promoted without acceptance.
