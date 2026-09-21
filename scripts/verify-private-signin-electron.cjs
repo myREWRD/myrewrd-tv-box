@@ -30,7 +30,10 @@ app.whenReady().then(async()=>{
     const value=await wc.mainFrame.executeJavaScript('document.querySelector("#email").value');assert.equal(value,'fixture@example.invalid');
     await delay(50);assert.equal(await send(3,{type:'erase'}),true);
     assert.equal(await wc.mainFrame.executeJavaScript('document.querySelector("#email").value'),'');
-    await wc.mainFrame.executeJavaScript('history.pushState({},"","/watch/home")');await delay(100);
+    // Successful navigation intentionally destroys this private renderer before
+    // Chromium necessarily resolves the execution promise. Verify teardown,
+    // rather than treating that expected promise rejection as a fixture error.
+    await wc.mainFrame.executeJavaScript('history.pushState({},"","/watch/home")').catch(error=>{if(remote.active||!wc.isDestroyed())throw error;});await delay(100);
     assert.equal(remote.active,false,'SPA playback return closes all private windows');
     console.log('PASS actual Windows Electron private sign-in: hidden capture before load completion, point/text/erase IPC, SPA completion and no visible private window.');
     record({ok:true,checks:['hidden-capture','point','text','erase','SPA-completion','hidden-windows']});remote.dispose();app.exit(0);
