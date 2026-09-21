@@ -1,6 +1,7 @@
 const path=require('node:path');
 const {credentialStepCode}=require('./provider-account-preload');
 const {createPrivateForm}=require('./provider-account-form');
+const {denyPrivatePermissions}=require('./private-permissions');
 // Explicit, single-use sign-in delivery. Never persist credentials, export
 // cookies, accept a caller URL, or put a private sign-in window on the TV.
 const HULU_LOGIN='https://auth.hulu.com/web/login/enter-email';
@@ -30,28 +31,21 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
   if(!validJob(job,now(),remaining?.())||signal.aborted||!isCurrent())return 'failed';
   const provider=job.provider;
   const finish=(status,reason)=>{diagnose(reason);return status;};
-  let window;let privateSession;let form;const attempted=new Set();let passwordSubmitted=false;
+  let window;let releasePermissions;let form;const attempted=new Set();let passwordSubmitted=false;
   let cleaned=false;
   const cleanup=()=>{
     if(cleaned)return;cleaned=true;
     form?.dispose();
     if(window&&!window.isDestroyed())window.destroy();
-    if(privateSession){privateSession.setPermissionRequestHandler(null);privateSession.setPermissionCheckHandler(null);}
+    releasePermissions?.();
     job.credentials.username='';job.credentials.password='';
   };
   try {
     window=new BrowserWindow({show:false,width:1000,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false,preload:path.join(__dirname,'provider-account-preload.js')}});
     const contents=window.webContents;
     form=formFactory(contents,{provider,isCurrent:()=>!signal.aborted&&isCurrent(),allowed:url=>allowedLoginUrl(url,provider),replyAllowed:url=>allowedLoginUrl(url,provider)||playbackReturn(url,provider),progress});
-    privateSession=contents.session;
-    // The app previously used Electron's default permission behavior. Preserve
-    // that for its existing windows, but never auto-grant a permission to this
-    // new hidden sign-in surface. Account submission is not location consent.
     let permissionRequested=false;
-    privateSession.setPermissionCheckHandler(wc=>Boolean(wc)&&wc!==contents);
-    privateSession.setPermissionRequestHandler((wc,_permission,callback)=>{
-      if(!wc||wc===contents){permissionRequested=true;callback(false);}else callback(true);
-    });
+    releasePermissions=denyPrivatePermissions(contents,()=>{permissionRequested=true;});
     // Never let provider popups create a visible credential surface.
     contents.setWindowOpenHandler(()=>({action:'deny'}));
     let denied=false;

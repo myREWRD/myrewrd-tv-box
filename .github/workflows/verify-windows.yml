@@ -22,6 +22,10 @@ jobs:
       - run: npm install
       - name: Source regressions
         run: |
+          node scripts/verify-private-signin.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-provider-accounts.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-live-input-queue.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-remote-restart.cjs
@@ -52,6 +56,13 @@ jobs:
         run: |
           $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-game-day-layout-electron.cjs' -WindowStyle Hidden -PassThru -Wait
           if ($fixture.ExitCode -ne 0) { exit 1 }
+
+      - name: Verify private sign-in screen and keyboard
+        run: |
+          $env:TV_PRIVATE_FIXTURE_RESULT = Join-Path $env:RUNNER_TEMP 'private-signin-result.json'
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-private-signin-electron.cjs' -WindowStyle Hidden -PassThru -Wait
+          $result = Get-Content -LiteralPath $env:TV_PRIVATE_FIXTURE_RESULT -Raw | ConvertFrom-Json
+          if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
 
       - name: Verify real Windows process identity
         run: |

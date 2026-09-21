@@ -238,3 +238,7 @@ This remains a scoped candidate, not proof of the physical timeout's cause or al
 ## 2026-09-21 provider redirect candidate 2.3.19
 
 The 2.3.18 physical Peacock attempt now reports manual_required/redirect_blocked in five seconds. The receiver previously treated any blocked child-frame redirect as a failed main login. This candidate still prevents every unapproved redirect but only aborts the whole attempt for a main-frame or unknown-frame redirect. Exact top-level credential forms and URL allowlists remain unchanged. Unit tests cover child/main/unknown frame metadata, and a Windows Chromium fixture with a real child-frame HTTP302 passes. This identifies a source defect, not yet proof of the physical failure's cause; actual Peacock acceptance remains required.
+
+## Attended private sign-in candidate 2.3.21
+
+The dashboard private sign-in transport is separate from ordinary TV control. Only recently authenticated venue administrators can open its hidden Hulu/Peacock window for five minutes. Per-document ephemeral input and capture never target the public display or desktop. Both private account paths share permission ownership; no private-window location/media/device permissions are granted. Run `node scripts/verify-private-signin.cjs` and the Windows Electron fixture before a scoped candidate release. Real-provider acceptance remains required; this candidate does not promote provisioning or fleet OTA. Canonical evidence and limitations are in dashboard `docs/security/TV_PROVIDER_ACCOUNTS.md`.
