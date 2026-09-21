@@ -13,5 +13,8 @@ const settle=async()=>{for(let i=0;i<50;i++)await Promise.resolve();};
   const full=createLiveInputQueue(()=>new Promise(r=>unblock=r),r=>saturated.push(r));
   for(let i=1;i<=10;i++)full.push({seq:i,command:{type:'key',key:'Space'}});
   assert.deepEqual(saturated,[{seq:10,applied:false}]);full.stop();unblock(true);await settle();assert.equal(saturated.length,1);
+  const metadata=[];const typed=createLiveInputQueue(async()=>({applied:true,editing:{text:'query',start:0,end:5},keyboard:2,secret:'never-forward'}),r=>metadata.push(r));
+  typed.push({seq:1,command:{type:'edit_start'}});typed.push({seq:2,command:{type:'text'}});typed.push({seq:3,command:{type:'keyboard_capabilities'}});await settle();
+  assert.deepEqual(metadata,[{seq:1,applied:true,editing:{text:'query',start:0,end:5}},{seq:2,applied:true},{seq:3,applied:true,keyboard:2}]);
   console.log('PASS hover flood preserves click/mute sequence, bounded discrete overflow is acknowledged, teardown drops pending input');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -66,6 +66,14 @@ jobs:
           Write-Output ($result | ConvertTo-Json -Compress)
           if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
 
+      - name: Verify live search editing
+        run: |
+          $searchResult = Join-Path $env:RUNNER_TEMP 'search-editing-result.json'
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList @('scripts/verify-search-editing-electron.cjs', ('"' + $searchResult + '"')) -WindowStyle Hidden -PassThru -Wait
+          $result = Get-Content -LiteralPath $searchResult -Raw | ConvertFrom-Json
+          Write-Output ($result | ConvertTo-Json -Compress)
+          if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
+
       - name: Verify real Windows process identity
         run: |
           $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-process-identity-electron.cjs' -WindowStyle Hidden -PassThru -Wait
