@@ -14,6 +14,7 @@ const { loadPresentationKey, ensurePresentationKey } = require("./presentation-k
 const { createEnrollment } = require("./enrollment");
 const { createRemoteStatus } = require("./remote-status");
 const { createProviderRemote, applyRemoteCommand } = require("./provider-remote");
+const { providerDisplayStatus } = require("./provider-display-status");
 const { createLiveRemote } = require("./live-remote");
 const { createPrivateSignIn } = require("./private-signin");
 const { createProviderAccounts } = require("./provider-accounts");
@@ -103,6 +104,8 @@ const remoteStatus = createRemoteStatus({ apiBase: API_BASE, getToken: () => con
   getKey: () => presentationKey,
   canReport: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)) });
 const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () => config.tvToken, getKey: () => presentationKey,
+  getDisplayStatus: () => providerDisplayStatus({ mode: currentMode, provider: gameDayProvider.selected(), contents: streamView?.webContents,
+    privateActive: providerAccounts.active || privateSignIn.active || Boolean(providerWindows.size), unavailable: isUpdating || presentation.active }),
   canPoll: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)),
   apply: command => command?.type==='restart_app' ? requestRemoteRestart() : applyRemoteCommand(command, {
     getView: () => streamView,

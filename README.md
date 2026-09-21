@@ -258,3 +258,7 @@ The dashboard private sign-in transport is separate from ordinary TV control. On
 ## Live search editor candidate 2.3.22
 
 Ordinary live remote protocol advertises keyboard capability2. Opening the editor reads only the selected, bounded non-sensitive search input and its selection over the ephemeral data channel. It binds an edit ID to the exact field, document and live session. Full-value updates support native phone/desktop selection, paste, deletion and empty clearing without HTTP input or persistence. A bound form submit refuses focus changes. The web editor serializes/coalesces changes, suppresses composition-time sends and stops on negative/lost ACKs rather than replaying. Sign-in/non-search fields remain excluded. Legacy text/erase commands remain compatible; older receivers retain the existing composer. Private provider sign-in remains a separate administrator-only workflow. Native/unit and actual Windows Chromium field/clear/replace/submit/focus-change tests pass; scoped hardware delivery and Peacock acceptance are still required before promotion.
+
+
+### 2026-09-21 provider status candidate
+TV Box2.3.25 reports allowlisted mode/provider IDs only. Dashboard/API expires them after20seconds; provider open does not confirm playback. Older/offline receivers show unknown status. No channel-changing features or credentials/URLs are added. Browser-paired displays support board content, not integrated Game Day providers. See dashboard TV_AND_LIVE_GAMES.md for coordinated release and acceptance gates.

@@ -1,0 +1,13 @@
+const assert = require('node:assert/strict');
+const { providerDisplayStatus: sample } = require('../src/provider-display-status');
+const contents = { isDestroyed: () => false, isLoading: () => false, getURL: () => 'https://www.peacocktv.com/watch/playback/live/test?secret=never-report' };
+const input = { mode: 'gameday', provider: 'peacock', contents };
+assert.deepEqual(sample(input), { mode: 'gameday', provider: 'peacock' });
+assert.deepEqual(sample({ ...input, mode: 'regular' }), { mode: 'regular', provider: null });
+assert.deepEqual(sample({ ...input, privateActive: true }), { mode: 'private', provider: null });
+assert.deepEqual(sample({ ...input, unavailable: true }), { mode: 'unavailable', provider: null });
+for (const getURL of [() => 'https://evil.invalid/', () => 'https://www.peacocktv.com.evil.invalid/', () => 'https://user:password@www.peacocktv.com/', () => { throw Error('closed'); }]) assert.equal(sample({ ...input, contents: { ...contents, getURL } }).provider, null);
+assert.equal(sample({ ...input, contents: { ...contents, isLoading: () => true } }).provider, null);
+assert.equal(sample({ ...input, provider: 'hulu' }).provider, null);
+assert.equal(JSON.stringify(sample(input)).includes('secret'), false);
+console.log('PASS provider status: actual origin, navigation races, modes, privacy, no URL reporting');

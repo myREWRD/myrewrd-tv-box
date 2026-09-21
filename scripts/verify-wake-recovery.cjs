@@ -53,6 +53,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       if (name === './sponsor') return require('../src/sponsor');
       if (name === './navigation') return require('../src/navigation');
       if (name === './provider-user-agent') return require('../src/provider-user-agent');
+      if (name === './provider-display-status') return require('../src/provider-display-status');
       if (name === './update') return require('../src/update');
       if (name === './presentation') return require('../src/presentation');
       if (name === './presentation-key') return require('../src/presentation-key');

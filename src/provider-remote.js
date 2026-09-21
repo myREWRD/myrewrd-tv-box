@@ -80,7 +80,7 @@ async function applyRemoteCommand(command, { getView, canControl, openProvider, 
   }
 }
 
-function createProviderRemote({ apiBase, getToken, getKey, canPoll, apply, fetcher = (...args) => fetch(...args), now = Date.now }) {
+function createProviderRemote({ apiBase, getToken, getKey, canPoll, apply, getDisplayStatus = () => undefined, fetcher = (...args) => fetch(...args), now = Date.now }) {
   let request = null, timer = null, activeUntil = 0, generation = 0, stopped = false;
   function stop() { stopped = true; generation++; request?.abort(); clearTimeout(timer); timer = null; activeUntil = 0; }
   async function tick() {
@@ -93,7 +93,7 @@ function createProviderRemote({ apiBase, getToken, getKey, canPoll, apply, fetch
     const headers = { 'Content-Type': 'application/json', 'X-TV-Token': token, 'X-TV-Presentation-Key': key };
     const current = () => !controller.signal.aborted && run === generation && canPoll() && token === getToken() && key === getKey();
     try {
-      const response = await fetcher(`${apiBase}/api/tv-remote`, { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ action: 'poll', protocol: 1 }) });
+      const response = await fetcher(`${apiBase}/api/tv-remote`, { method: 'POST', headers, signal: controller.signal, body: JSON.stringify({ action: 'poll', protocol: 1, display: getDisplayStatus() }) });
       if (!response.ok || !current()) return;
       const { command: envelope } = await response.json();
       if (!envelope || !current()) return;
