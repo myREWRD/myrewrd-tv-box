@@ -74,8 +74,15 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
     // Never let provider popups create a visible credential surface.
     contents.setWindowOpenHandler(()=>({action:'deny'}));
     let denied=false;
-    for(const eventName of ['will-navigate','will-redirect'])contents.on(eventName,(event,url)=>{
-      if(!allowedLoginUrl(url,provider)&&!playbackReturn(url,provider)){event.preventDefault();denied=true;}
+    for(const eventName of ['will-navigate','will-redirect'])contents.on(eventName,(event,legacyUrl,_inPlace,legacyMainFrame)=>{
+      const url=event.url??legacyUrl;
+      if(!allowedLoginUrl(url,provider)&&!playbackReturn(url,provider)){
+        event.preventDefault();
+        // A blocked analytics/subframe redirect is not a failed main-document
+        // sign-in. Unknown frame identity still fails closed. Credential writes
+        // remain restricted to the exact top-level provider form.
+        if((event.isMainFrame??legacyMainFrame)!==false)denied=true;
+      }
     });
     const abort=cleanup;signal.addEventListener('abort',abort,{once:true});
     try {
