@@ -269,3 +269,8 @@ Ordinary live remote protocol advertises keyboard capability2. Opening the edito
 
 ### 2026-09-21 provider status candidate
 TV Box2.3.25 reports allowlisted mode/provider IDs only. Dashboard/API expires them after20seconds; provider open does not confirm playback. Older/offline receivers show unknown status. No channel-changing features or credentials/URLs are added. Browser-paired displays support board content, not integrated Game Day providers. See dashboard TV_AND_LIVE_GAMES.md for coordinated release and acceptance gates.
+
+
+## 2026-09-21 — GitHub action runtime migration
+
+The CI migration pins verified Node 24 actions while preserving existing application/build Node versions, dependencies and release targets. Workflow-only edits build on pull requests and no longer trigger a production main build. Playback approval and source/package/script release triggers remain. No installer or firmware publication is part of this migration.Canonical evidence, test limitations and recovery: [CI runtime migration](https://github.com/myREWRD/ssdt-dashboard/blob/main/docs/operations/CI_RUNTIME_MIGRATION_2026_09.md). Rollout is pending exact-head CI and independent review.
