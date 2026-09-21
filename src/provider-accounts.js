@@ -3,7 +3,7 @@ const {validJob,runHuluLogin}=require('./provider-account-login');
 function createProviderAccounts({BrowserWindow,apiBase,getToken,getKey,canPoll,onPrivateStart,fetcher=(...args)=>fetch(...args),login=runHuluLogin,now=Date.now,monotonic=()=>performance.now(),diagnose=()=>{}}) {
   let request=null,active=false,generation=0;
   const seen=new Map();let history=[];
-  const stages=new Set(['poll_rejected','invalid_response','invalid_job','insufficient_budget','duplicate_job','capacity_reached','private_start','private_start_failed','login_started','login_finished','report_accepted','report_rejected','cancelled','request_failed']);
+  const stages=new Set(['poll_rejected','invalid_response','invalid_job','insufficient_budget','duplicate_job','capacity_reached','private_start','private_start_failed','login_started','form_document_ready','form_email_submitted','form_password_submitted','login_finished','report_accepted','report_rejected','cancelled','request_failed']);
   const reasons=new Set(['navigation_failed','redirect_blocked','permission_required','password_submitted','existing_session','document_blocked','verification_step','form_changed','attempt_expired','receiver_error']);
   function record(stage,reason){
     if(!stages.has(stage))return;
@@ -57,7 +57,7 @@ function createProviderAccounts({BrowserWindow,apiBase,getToken,getKey,canPoll,o
         try {
           record('login_started');
           const outcome=await Promise.race([
-            Promise.resolve().then(()=>login({BrowserWindow,job,signal:loginController.signal,isCurrent:()=>current()&&!loginController.signal.aborted,now,remaining,diagnose:value=>{if(reasons.has(value))reason=value;}})).catch(()=>{reason='receiver_error';return 'failed';}),
+            Promise.resolve().then(()=>login({BrowserWindow,job,signal:loginController.signal,isCurrent:()=>current()&&!loginController.signal.aborted,now,remaining,progress:stage=>{if(current())record(stage);},diagnose:value=>{if(reasons.has(value))reason=value;}})).catch(()=>{reason='receiver_error';return 'failed';}),
             stopped,
           ]);
           if(outcome===cancelled){record('cancelled');return;}

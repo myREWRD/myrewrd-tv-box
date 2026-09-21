@@ -227,6 +227,14 @@ Peacock password submission recognizes the observed same-form Sign In button wit
 
 Provider-account protocol 3 requires the server's database-relative remaining_ms budget. The receiver subtracts the full request roundtrip and uses monotonic deadlines, preserving the original two-minute expiry without depending on the Windows clock. Older protocols remain supported server-side. The receiver overwrites provider-account-status.json in AppData with at most 16 fixed stage/reason enums and timestamps; it never includes credentials, URLs, DOM, tokens or exception messages. Private-start failures report failure and report acknowledgements are checked. No credential replay is added. Clock skew/jump, expiry, cancellation, replay and report-denial tests pass. Actual Peacock acceptance remains pending; this is a scoped candidate, not a provisioning or fleet promotion.
 
+## 2026-09-21 DOM-ready private form candidate 2.3.20
+
+Physical 2.3.19 Peacock job 1c789384-ab38-45af-963c-82c51fd8fefb was claimed at 01:50:44 UTC and reported failed/attempt_expired at 01:52:32 UTC. The terminal diagnostic window was closed. Credentials remain saved; this is not accepted Peacock sign-in.
+
+Electron's main-process isolated execution waits for the main frame to stop loading. A local Chromium regression with a never-finishing subresource demonstrates why waiting for complete loading is unsuitable for an already usable provider form. Candidate 2.3.20 uses a private sandboxed preload to execute the existing fixed exact-origin form steps after DOM readiness. Only per-window main-frame IPC is used; there is no page bridge or ordinary remote credential API. Document nonces, request IDs, navigation gating, revocation and synchronous cleanup reject stale input/results. Main-frame replies may finish while their original document navigates; committed navigation invalidates them. Three fixed progress enums identify readiness/email/password submission without field readback.
+
+This remains a scoped candidate, not proof of the physical timeout's cause or all-provider acceptance. Private administrator verification keyboard is still separate unfinished work. No provisioning/fleet promotion until real acceptance.
+
 ## 2026-09-21 provider redirect candidate 2.3.19
 
 The 2.3.18 physical Peacock attempt now reports manual_required/redirect_blocked in five seconds. The receiver previously treated any blocked child-frame redirect as a failed main login. This candidate still prevents every unapproved redirect but only aborts the whole attempt for a main-frame or unknown-frame redirect. Exact top-level credential forms and URL allowlists remain unchanged. Unit tests cover child/main/unknown frame metadata, and a Windows Chromium fixture with a real child-frame HTTP302 passes. This identifies a source defect, not yet proof of the physical failure's cause; actual Peacock acceptance remains required.

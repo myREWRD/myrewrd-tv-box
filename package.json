@@ -1,6 +1,6 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "2.3.19",
+  "version": "2.3.20",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "verify:update": "node scripts/verify-update.cjs",
     "build:win-installed": "node scripts/build-protected-windows.cjs",
     "verify:provider-remote": "node scripts/verify-provider-remote.cjs",
-    "verify:provider-accounts": "node scripts/verify-provider-accounts.cjs"
+    "verify:provider-accounts": "node scripts/verify-provider-accounts.cjs && node scripts/verify-provider-account-form.cjs"
   },
   "build": {
     "electronDist": "node_modules/electron/dist",

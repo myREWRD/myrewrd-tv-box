@@ -1,5 +1,6 @@
-const assert=require('node:assert/strict');const {runHuluLogin,allowedLoginUrl,validJob,credentialStepCode}=require('../src/provider-account-login');
+const assert=require('node:assert/strict');const {runHuluLogin:runLogin,allowedLoginUrl,validJob,credentialStepCode}=require('../src/provider-account-login');
 const {createProviderAccounts}=require('../src/provider-accounts');
+const runHuluLogin=options=>runLogin({...options,formFactory:contents=>({execute:(step,value,username)=>contents.isLoadingMainFrame()?Promise.resolve('not_ready'):contents.executeJavaScriptInIsolatedWorld(1005,[{code:credentialStepCode(step,value,'hulu',username)}]),dispose(){}})});
 const now=1000000;const makeJob=()=>({id:'11111111-1111-4111-8111-111111111111',provider:'hulu',remaining_ms:120000,expires_at:new Date(now+120000).toISOString(),credentials:{username:'fixture@example.invalid',password:'test-only-fixture'}});
 for(const url of ['http://auth.hulu.com/web/login','https://auth.hulu.com.evil.invalid/web/login','https://evil@auth.hulu.com/web/login','https://auth.hulu.com:444/web/login','https://auth.hulu.com/web/signup'])assert.equal(allowedLoginUrl(url),false);
 assert.equal(allowedLoginUrl('https://auth.hulu.com/web/login/enter-password'),true);
