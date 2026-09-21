@@ -11,9 +11,12 @@ function createLiveInputQueue(apply, acknowledge) {
         // Preserve sequence order even when a later hover replaces older moves.
         const next=commands.length && (!hover || commands[0].seq<hover.seq) ? commands.shift() : hover;
         if(next===hover)hover=null;
-        let applied=false;
-        try {applied=await apply(next)===true;} catch {}
-        if(!stopped)acknowledge({seq:next.seq,applied});
+        let applied=false,editing,keyboard;
+        try {const result=await apply(next);applied=result===true||result?.applied===true;
+          if(applied&&next.command?.type==='keyboard_capabilities'&&result?.keyboard===2)keyboard=2;
+          const e=result?.editing;if(applied&&next.command?.type==='edit_start'&&typeof e?.text==='string'&&e.text.length<=256&&!/[\x00-\x1f\x7f]/.test(e.text)&&Number.isInteger(e.start)&&Number.isInteger(e.end)&&e.start>=0&&e.start<=e.end&&e.end<=e.text.length)editing={text:e.text,start:e.start,end:e.end};
+        } catch {}
+        if(!stopped)acknowledge({seq:next.seq,applied,...(editing?{editing}:{}),...(keyboard?{keyboard}:{})});
       }
     } finally {active=false;}
   }

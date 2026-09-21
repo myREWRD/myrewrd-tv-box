@@ -1,5 +1,21 @@
 # myREWRD TV Box
 
+## 2.3.24 candidate: Peacock browser compatibility
+
+On the paired Windows TV, Peacock account lookup returned HTTP 422 in the embedded browser while the same account signed in and played with sound in Chrome on that box. A temporary DevTools Chrome/Windows identity override let the embedded browser accept the same email and reach the password form. Candidate 2.3.24 removes only Electron/myREWRD product tokens from the real Chromium user agent for exact Peacock HTTPS pages, including saved-account and private sign-in windows. Other providers restore the original identity. Chromium/OS versions, cookies, sandbox, navigation, permissions and DRM remain unchanged. Permanent-build authentication and playback acceptance are still required; this is not yet a production release.
+
+## Search textarea compatibility (candidate)
+
+Actual 2.3.23 YouTube search refused keyboard binding with diagnostic `type`. The current official YouTube search control is a `textarea` named `search_query`, not an input. Recognized search textareas now use their native value setter with the existing search classification, sensitive-form refusal, focus/session binding and text/selection limits. Arbitrary textareas remain excluded. Unit, private-boundary and real Windows Electron input/textarea fixtures pass; physical acceptance remains pending. Peacock manual sign-in and production promotion remain unverified.
+
+## 2.3.23 candidate: Peacock existing-account route and search diagnostics
+
+The official Peacock `/signin` route was observed with both email and password fields. Start saved-account and private sessions there instead of the email-only `/start` page, which stayed on an error indicator during actual2.3.22 testing. Existing exact-origin/path and private-session protections remain. This is pending physical acceptance, not proof of sign-in. Search binding now writes only a fixed rejection-stage enum and timestamp to `search-edit-status.json`; no field values, selectors, URLs or credentials are logged. This diagnoses the physical YouTube rejection without weakening field/privacy/loading guards. Native PR35 remains unaccepted and provisioning stays2.3.13.
+
+## Provider-account sign-in development (2026-09-20, unreleased)
+
+The new receiver polls a separate authenticated `/api/tv-provider-accounts` endpoint for one-shot, short-lived account jobs. It uses a hidden sandboxed provider window sharing this box's existing session, pauses live remote control, rejects duplicate jobs and stops on key/context changes. Credentials are transient and never written to config, logs or command receipts. Only the observed Hulu email/password forms are implemented; unknown verification steps require attention. A submitted form is not verified playback. The canonical dashboard `docs/security/TV_PROVIDER_ACCOUNTS.md` defines the vault and release gates. Package 2.3.14 is an unaccepted candidate; provisioning remains accepted 2.3.13 until validation and promotion.
+
 ## TV release and new-device provisioning must stay aligned
 
 Every approved production TV build/update is incomplete until the dashboard new-device and migration installer pins are updated to that same accepted version, ZIP SHA256 and setup-script SHA256. Publish immutable signed ZIP and versioned setup assets together; verify their public downloads, update provisioning tests and canonical release status in a companion PR, merge/deploy it, and run the published-release verifier. Never announce completion based only on a test-box OTA. ZIP-only, explicitly scoped canaries may remain newer while acceptance is pending; publishing a production setup script makes it subject to provisioning alignment. Do not silently overwrite a published version or promote an unaccepted candidate. A rollback must coordinate installer defaults and deployed-device offers and document the reason; do not remove release history to silence drift checks.
@@ -199,3 +215,50 @@ Physical diagnosis found ESPN Watch Live navigates to `/watch/player/_/id/<id>/s
 ### 2.3.11 updater process identity
 
 The main process supplies Electron process metrics creationTime (OS epoch milliseconds) to the update supervisor instead of estimating start time from Node uptime. A physical 2.3.9 to 2.3.10 update stopped safely because its estimate differed by 5430 ms from Windows, exceeding the unchanged 5000 ms identity tolerance. Missing/mismatched metrics fail closed. PID, executable hashes, supervisor timestamp tolerance and rollback remain unchanged.
+
+## Provider sign-in loading follow-up (unreleased)
+
+The Hulu runner no longer waits for every page subresource before inspecting its exact allowed form. Main-frame loading still gates injection, origin/path/form checks remain mandatory, and the loop leaves 12 seconds before job expiry for result reporting. This margin is not a separate timeout around JavaScript execution; the worker abort remains the final bound. Unit fixtures cover a never-settling full-load promise and a stalled main frame; the hidden Windows Electron fixture passed with synthetic forms and no provider network. This fixes a possible stall mechanism, not a proven physical timeout root cause. Actual Hulu acceptance and all other provider adapters remain pending. Published 2.3.14 is immutable; any next artifact needs a new version and must not be promoted without acceptance.
+
+### 2.3.15 candidate — provider acceptance pending
+The Hulu load-handling follow-up is packaged under a new immutable candidate version. Unit account, fullscreen and resume checks pass; this is not all-provider physical sign-in/playback acceptance. Keep accepted provisioning at 2.3.13 until the candidate passes the recorded hardware/provider gates and matching setup assets are published.
+
+
+Peacock candidate: protocol 2 adds exact observed top-level /start and /signin forms on www.peacocktv.com. Private sign-in remains hidden; challenge, unexpected navigation and location requests require attention. Synthetic Windows Chromium email/password steps pass for Hulu and Peacock. This is not physical sign-in acceptance; protocol 1 remains Hulu-only and the backend requires 2.3.15 for Peacock.
+
+
+### 2.3.16 candidate
+
+Adds separate YouTube / NFL Sunday Ticket destination (existing youtube remains YouTube TV), sanitized video-ID restoration, and ephemeral ordinary-field keyboard input in the live remote. Private sign-in pages remain excluded. Fixed non-sensitive sign-in failure reasons aid Peacock diagnosis; real Peacock acceptance is pending. This candidate does not change accepted provisioning until physical acceptance and companion pin alignment.
+
+## 2026-09-20 provider sign-in recovery candidate 2.3.17
+
+Peacock password submission recognizes the observed same-form Sign In button with HTML default submit type, as well as an explicit submit type. Exact origins, paths, field identities and visible unique button checks remain required. The login deadline cancels and destroys its hidden window before the report deadline; idempotent synchronous cleanup prevents late script completion from clearing a later attempt’s permission handlers. Timeout reports retain a bounded live request and never replay credentials. Windows synthetic default-submit Peacock and native timeout/late-cleanup regressions pass. Physical saved-account sign-in and playback remain acceptance gates; no provisioning promotion is implied.
+
+## 2026-09-21 provider receiver candidate 2.3.18
+
+Provider-account protocol 3 requires the server's database-relative remaining_ms budget. The receiver subtracts the full request roundtrip and uses monotonic deadlines, preserving the original two-minute expiry without depending on the Windows clock. Older protocols remain supported server-side. The receiver overwrites provider-account-status.json in AppData with at most 16 fixed stage/reason enums and timestamps; it never includes credentials, URLs, DOM, tokens or exception messages. Private-start failures report failure and report acknowledgements are checked. No credential replay is added. Clock skew/jump, expiry, cancellation, replay and report-denial tests pass. Actual Peacock acceptance remains pending; this is a scoped candidate, not a provisioning or fleet promotion.
+
+## 2026-09-21 DOM-ready private form candidate 2.3.20
+
+Physical 2.3.19 Peacock job 1c789384-ab38-45af-963c-82c51fd8fefb was claimed at 01:50:44 UTC and reported failed/attempt_expired at 01:52:32 UTC. The terminal diagnostic window was closed. Credentials remain saved; this is not accepted Peacock sign-in.
+
+Electron's main-process isolated execution waits for the main frame to stop loading. A local Chromium regression with a never-finishing subresource demonstrates why waiting for complete loading is unsuitable for an already usable provider form. Candidate 2.3.20 uses a private sandboxed preload to execute the existing fixed exact-origin form steps after DOM readiness. Only per-window main-frame IPC is used; there is no page bridge or ordinary remote credential API. Document nonces, request IDs, navigation gating, revocation and synchronous cleanup reject stale input/results. Main-frame replies may finish while their original document navigates; committed navigation invalidates them. Three fixed progress enums identify readiness/email/password submission without field readback.
+
+This remains a scoped candidate, not proof of the physical timeout's cause or all-provider acceptance. Private administrator verification keyboard is still separate unfinished work. No provisioning/fleet promotion until real acceptance.
+
+## 2026-09-21 provider redirect candidate 2.3.19
+
+The 2.3.18 physical Peacock attempt now reports manual_required/redirect_blocked in five seconds. The receiver previously treated any blocked child-frame redirect as a failed main login. This candidate still prevents every unapproved redirect but only aborts the whole attempt for a main-frame or unknown-frame redirect. Exact top-level credential forms and URL allowlists remain unchanged. Unit tests cover child/main/unknown frame metadata, and a Windows Chromium fixture with a real child-frame HTTP302 passes. This identifies a source defect, not yet proof of the physical failure's cause; actual Peacock acceptance remains required.
+
+## Attended private sign-in candidate 2.3.21
+
+The dashboard private sign-in transport is separate from ordinary TV control. Only recently authenticated venue administrators can open its hidden Hulu/Peacock window for five minutes. Per-document ephemeral input and capture never target the public display or desktop. Both private account paths share permission ownership; no private-window location/media/device permissions are granted. Run `node scripts/verify-private-signin.cjs` and the Windows Electron fixture before a scoped candidate release. Real-provider acceptance remains required; this candidate does not promote provisioning or fleet OTA. Canonical evidence and limitations are in dashboard `docs/security/TV_PROVIDER_ACCOUNTS.md`.
+
+## Live search editor candidate 2.3.22
+
+Ordinary live remote protocol advertises keyboard capability2. Opening the editor reads only the selected, bounded non-sensitive search input and its selection over the ephemeral data channel. It binds an edit ID to the exact field, document and live session. Full-value updates support native phone/desktop selection, paste, deletion and empty clearing without HTTP input or persistence. A bound form submit refuses focus changes. The web editor serializes/coalesces changes, suppresses composition-time sends and stops on negative/lost ACKs rather than replaying. Sign-in/non-search fields remain excluded. Legacy text/erase commands remain compatible; older receivers retain the existing composer. Private provider sign-in remains a separate administrator-only workflow. Native/unit and actual Windows Chromium field/clear/replace/submit/focus-change tests pass; scoped hardware delivery and Peacock acceptance are still required before promotion.
+
+
+### 2026-09-21 provider status candidate
+TV Box2.3.25 reports allowlisted mode/provider IDs only. Dashboard/API expires them after20seconds; provider open does not confirm playback. Older/offline receivers show unknown status. No channel-changing features or credentials/URLs are added. Browser-paired displays support board content, not integrated Game Day providers. See dashboard TV_AND_LIVE_GAMES.md for coordinated release and acceptance gates.

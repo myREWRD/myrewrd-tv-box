@@ -8,12 +8,16 @@ const { prepareUpdate, createCandidate, blockedVersion, currentProcessIdentity }
 const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
 const { allowedNavigation } = require("./navigation");
+const { applyProviderUserAgent, applyNavigationUserAgent } = require("./provider-user-agent");
 const { createPresentation } = require("./presentation");
 const { loadPresentationKey, ensurePresentationKey } = require("./presentation-key");
 const { createEnrollment } = require("./enrollment");
 const { createRemoteStatus } = require("./remote-status");
 const { createProviderRemote, applyRemoteCommand } = require("./provider-remote");
+const { providerDisplayStatus } = require("./provider-display-status");
 const { createLiveRemote } = require("./live-remote");
+const { createPrivateSignIn } = require("./private-signin");
+const { createProviderAccounts } = require("./provider-accounts");
 const { gameDayUrl } = require("./game-day-url");
 const { createGameDayProvider, HOMES, resumeUrl } = require("./game-day-provider");
 const { createProtectedPlayback } = require("./protected-playback");
@@ -26,17 +30,19 @@ app.on("second-instance", () => { if (mainWindow) restoreBoard(); });
 
 function navigate(contents, url) {
   if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
+  applyProviderUserAgent(contents, url);
   const options = /^https:\/\/www\.youtube\.com\/embed\//.test(url) ? {httpReferrer:API_BASE} : {};
   contents.loadURL(url, options).catch(() => {});
 }
 
 function guardNavigation(contents) {
   for (const eventName of ["will-navigate", "will-redirect"]) {
-    contents.on(eventName, (event, url) => {
+    contents.on(eventName, (event, url, _inPlace, isMainFrame) => {
       const completingPairing = !config.paired && contents === mainWindow?.webContents
         && contents.getURL() === `${API_BASE}/tv/pair`
         && Boolean(tokenFromBoardUrl(url, API_BASE));
       if (!completingPairing && !allowedNavigation(url, API_BASE, config.tvToken)) event.preventDefault();
+      else applyNavigationUserAgent(contents, eventName, event, url, isMainFrame);
     });
   }
   contents.setWindowOpenHandler(({ url }) => {
@@ -98,10 +104,12 @@ const remoteStatus = createRemoteStatus({ apiBase: API_BASE, getToken: () => con
   getKey: () => presentationKey,
   canReport: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)) });
 const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () => config.tvToken, getKey: () => presentationKey,
+  getDisplayStatus: () => providerDisplayStatus({ mode: currentMode, provider: gameDayProvider.selected(), contents: streamView?.webContents,
+    privateActive: providerAccounts.active || privateSignIn.active || Boolean(providerWindows.size), unavailable: isUpdating || presentation.active }),
   canPoll: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)),
   apply: command => command?.type==='restart_app' ? requestRemoteRestart() : applyRemoteCommand(command, {
     getView: () => streamView,
-    canControl: () => currentMode === 'gameday' && !presentation.active && !providerWindows.size && !isUpdating,
+    canControl: () => currentMode === 'gameday' && !providerAccounts.active && !privateSignIn.active && !presentation.active && !providerWindows.size && !isUpdating,
     openProvider: (url, provider) => openGameDayProvider(provider), focus: () => mainWindow?.focus(),
   }),
 });
@@ -120,15 +128,27 @@ function requestRemoteRestart() {
 }
 
 const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
+  diagnoseSearch:reason=>{if(['field','type','autocomplete','search','sensitive','selection','execution','context','loading','connected','binding'].includes(reason))fs.writeFileSync(path.join(app.getPath('userData'),'search-edit-status.json'),JSON.stringify({reason,at:new Date().toISOString()}));},
   diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'live-remote-status.json'),JSON.stringify(record)),
   getToken:()=>config.tvToken, getKey:()=>presentationKey, getView:()=>streamView,
-  canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating),
+  canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !providerAccounts.active && !privateSignIn.active && !presentation.active && !providerWindows.size && !isUpdating),
   apply:(command, liveCurrent)=>applyRemoteCommand(command,{getView:()=>streamView,
-    canControl:()=>liveCurrent() && currentMode==='gameday' && !presentation.active && !providerWindows.size && !isUpdating,
+    canControl:()=>liveCurrent() && currentMode==='gameday' && !providerAccounts.active && !privateSignIn.active && !presentation.active && !providerWindows.size && !isUpdating,
     openProvider:(url,provider)=>openGameDayProvider(provider),focus:()=>mainWindow?.focus()})
 });
 
+const providerAccounts=createProviderAccounts({BrowserWindow,apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+  diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'provider-account-status.json'),JSON.stringify(record)),
+  canPoll:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size&&!privateSignIn.active),
+  onPrivateStart:()=>{privateSignIn.stop();liveRemote.stop();providerResume.cancel();}});
+
+const privateSignIn=createPrivateSignIn({BrowserWindow,ipcMain,apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+  canStart:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size&&!providerAccounts.active),
+  onStart:()=>{providerAccounts.stop();liveRemote.stop();providerResume.cancel();}});
+
 function restoreBoard() {
+  providerAccounts.stop();
+  privateSignIn.stop();
   liveRemote.stop();
   providerRemote.stop();
   if (handoffRequested || (updateCandidate && !updateCandidate.active)) return;
@@ -258,6 +278,8 @@ function createMainWindow() {
 
 // ─── Mode Switching ─────────────────────────────────────────────────────────
 function switchMode(mode, options = {}) {
+  providerAccounts.stop();
+  privateSignIn.stop();
   liveRemote.stop();
   providerResume.cancel();
   if (updateCandidate && !updateCandidate.active && mode !== "regular") return;
@@ -462,6 +484,8 @@ function startPolling() {
 }
 
 async function pollForCommands() {
+  void providerAccounts.tick();
+  void privateSignIn.tick();
   void providerRemote.tick();
   void remoteStatus.tick();
   presentation.tick();
@@ -607,6 +631,8 @@ async function checkForUpdate(latestVersion, downloadUrl, sha256) {
   if (compareVersions(APP_VERSION, latestVersion) <= 0) return;
   if (!/^[a-f0-9]{64}$/i.test(sha256 || "") || blockedVersion(INSTALL_DIR, latestVersion)) return;
   isUpdating = true;
+  providerAccounts.stop();
+  privateSignIn.stop();
   try {
     const previousExe = Number(APP_VERSION.split(".")[0]) < 2 && process.env.PORTABLE_EXECUTABLE_FILE
       ? process.env.PORTABLE_EXECUTABLE_FILE : process.execPath;
@@ -678,6 +704,8 @@ function handleCommand(msg) {
       break;
 
     case "unpair":
+      providerAccounts.stop();
+  privateSignIn.stop();
       liveRemote.stop();
   providerRemote.stop();
       remoteStatus.stop();
@@ -735,6 +763,8 @@ app.whenReady().then(() => {
   powerMonitor.on("resume", () => recovery.schedule());
   powerMonitor.on("unlock-screen", () => recovery.schedule());
   powerMonitor.on("suspend", () => {
+    providerAccounts.stop();
+  privateSignIn.stop();
     liveRemote.stop();
   providerRemote.stop();
     remoteStatus.stop();
@@ -749,6 +779,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  providerAccounts.stop();
+  privateSignIn.stop();
   liveRemote.stop();
   providerRemote.stop();
   streamRequest++;

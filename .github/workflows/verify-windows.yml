@@ -22,6 +22,15 @@ jobs:
       - run: npm install
       - name: Source regressions
         run: |
+          node scripts/verify-provider-user-agent.cjs
+          node scripts/verify-provider-display-status.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-provider-text-editing.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-private-signin.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-provider-accounts.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-live-input-queue.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-remote-restart.cjs
@@ -33,6 +42,8 @@ jobs:
           node scripts/verify-game-day-url.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-provider-remote.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-provider-display-status.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-wake-recovery.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -52,6 +63,31 @@ jobs:
         run: |
           $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-game-day-layout-electron.cjs' -WindowStyle Hidden -PassThru -Wait
           if ($fixture.ExitCode -ne 0) { exit 1 }
+
+      - name: Verify private sign-in screen and keyboard
+        run: |
+          $privateResult = Join-Path $env:RUNNER_TEMP 'private-signin-result.json'
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList @('scripts/verify-private-signin-electron.cjs', ('"' + $privateResult + '"')) -WindowStyle Hidden -PassThru -Wait
+          $result = Get-Content -LiteralPath $privateResult -Raw | ConvertFrom-Json
+          Write-Output ("Private fixture exit: " + $fixture.ExitCode)
+          Write-Output ($result | ConvertTo-Json -Compress)
+          if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
+
+      - name: Verify live search editing
+        run: |
+          $searchResult = Join-Path $env:RUNNER_TEMP 'search-editing-result.json'
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList @('scripts/verify-search-editing-electron.cjs', ('"' + $searchResult + '"')) -WindowStyle Hidden -PassThru -Wait
+          $result = Get-Content -LiteralPath $searchResult -Raw | ConvertFrom-Json
+          Write-Output ($result | ConvertTo-Json -Compress)
+          if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
+
+      - name: Verify provider browser identity
+        run: |
+          $agentResult = Join-Path $env:RUNNER_TEMP 'provider-agent-result.json'
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList @('scripts/verify-provider-user-agent-electron.cjs', ('"' + $agentResult + '"')) -WindowStyle Hidden -PassThru -Wait
+          $result = Get-Content -LiteralPath $agentResult -Raw | ConvertFrom-Json
+          Write-Output ($result | ConvertTo-Json -Compress)
+          if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
 
       - name: Verify real Windows process identity
         run: |
