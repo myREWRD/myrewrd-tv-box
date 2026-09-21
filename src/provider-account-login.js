@@ -2,6 +2,7 @@ const path=require('node:path');
 const {credentialStepCode}=require('./provider-account-preload');
 const {createPrivateForm}=require('./provider-account-form');
 const {denyPrivatePermissions}=require('./private-permissions');
+const {applyProviderUserAgent}=require('./provider-user-agent');
 // Explicit, single-use sign-in delivery. Never persist credentials, export
 // cookies, accept a caller URL, or put a private sign-in window on the TV.
 const HULU_LOGIN='https://auth.hulu.com/web/login/enter-email';
@@ -43,6 +44,7 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
   try {
     window=new BrowserWindow({show:false,width:1000,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false,preload:path.join(__dirname,'provider-account-preload.js')}});
     const contents=window.webContents;
+    applyProviderUserAgent(contents,provider==='peacock'?PEACOCK_LOGIN:HULU_LOGIN);
     form=formFactory(contents,{provider,isCurrent:()=>!signal.aborted&&isCurrent(),allowed:url=>allowedLoginUrl(url,provider),replyAllowed:url=>allowedLoginUrl(url,provider)||playbackReturn(url,provider),progress});
     let permissionRequested=false;
     releasePermissions=denyPrivatePermissions(contents,()=>{permissionRequested=true;});

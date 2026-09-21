@@ -8,6 +8,7 @@ const { prepareUpdate, createCandidate, blockedVersion, currentProcessIdentity }
 const { normalizeSponsorPayload } = require("./sponsor");
 const { tokenFromBoardUrl, createRecovery } = require("./recovery");
 const { allowedNavigation } = require("./navigation");
+const { applyProviderUserAgent, applyNavigationUserAgent } = require("./provider-user-agent");
 const { createPresentation } = require("./presentation");
 const { loadPresentationKey, ensurePresentationKey } = require("./presentation-key");
 const { createEnrollment } = require("./enrollment");
@@ -28,17 +29,19 @@ app.on("second-instance", () => { if (mainWindow) restoreBoard(); });
 
 function navigate(contents, url) {
   if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
+  applyProviderUserAgent(contents, url);
   const options = /^https:\/\/www\.youtube\.com\/embed\//.test(url) ? {httpReferrer:API_BASE} : {};
   contents.loadURL(url, options).catch(() => {});
 }
 
 function guardNavigation(contents) {
   for (const eventName of ["will-navigate", "will-redirect"]) {
-    contents.on(eventName, (event, url) => {
+    contents.on(eventName, (event, url, _inPlace, isMainFrame) => {
       const completingPairing = !config.paired && contents === mainWindow?.webContents
         && contents.getURL() === `${API_BASE}/tv/pair`
         && Boolean(tokenFromBoardUrl(url, API_BASE));
       if (!completingPairing && !allowedNavigation(url, API_BASE, config.tvToken)) event.preventDefault();
+      else applyNavigationUserAgent(contents, eventName, event, url, isMainFrame);
     });
   }
   contents.setWindowOpenHandler(({ url }) => {

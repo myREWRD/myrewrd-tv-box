@@ -1,5 +1,9 @@
 # myREWRD TV Box
 
+## 2.3.24 candidate: Peacock browser compatibility
+
+On the paired Windows TV, Peacock account lookup returned HTTP 422 in the embedded browser while the same account signed in and played with sound in Chrome on that box. A temporary DevTools Chrome/Windows identity override let the embedded browser accept the same email and reach the password form. Candidate 2.3.24 removes only Electron/myREWRD product tokens from the real Chromium user agent for exact Peacock HTTPS pages, including saved-account and private sign-in windows. Other providers restore the original identity. Chromium/OS versions, cookies, sandbox, navigation, permissions and DRM remain unchanged. Permanent-build authentication and playback acceptance are still required; this is not yet a production release.
+
 ## Search textarea compatibility (candidate)
 
 Actual 2.3.23 YouTube search refused keyboard binding with diagnostic `type`. The current official YouTube search control is a `textarea` named `search_query`, not an input. Recognized search textareas now use their native value setter with the existing search classification, sensitive-form refusal, focus/session binding and text/selection limits. Arbitrary textareas remain excluded. Unit, private-boundary and real Windows Electron input/textarea fixtures pass; physical acceptance remains pending. Peacock manual sign-in and production promotion remain unverified.

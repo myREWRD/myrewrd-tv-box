@@ -4,6 +4,7 @@ const {randomUUID}=require('node:crypto');
 const {performance}=require('node:perf_hooks');
 const {allowedLoginUrl,playbackReturn,HULU_LOGIN,PEACOCK_LOGIN}=require('./provider-account-login');
 const {denyPrivatePermissions}=require('./private-permissions');
+const {applyProviderUserAgent}=require('./provider-user-agent');
 
 function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canStart,onStart,fetcher=(...args)=>fetch(...args)}) {
   const file=path.join(__dirname,'pages','private-signin.html');
@@ -27,6 +28,7 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     stop();blocked=null;session=next;lease=deadline;sequence=-1;boundToken=getToken();boundKey=getKey();onStart();
     providerWindow=new BrowserWindow({show:false,width:1100,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false,preload:path.join(__dirname,'private-signin-preload.js')}});
     const target=providerWindow,contents=target.webContents,run=generation,profile=contents.session;
+    applyProviderUserAgent(contents,next.provider==='peacock'?PEACOCK_LOGIN:HULU_LOGIN);
     const current=()=>run===generation&&providerWindow===target&&valid();
     const invalidate=()=>{document=null;settle(false);};
     contents.setWindowOpenHandler(()=>({action:'deny'}));

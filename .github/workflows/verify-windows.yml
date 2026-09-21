@@ -22,6 +22,10 @@ jobs:
       - run: npm install
       - name: Source regressions
         run: |
+          node scripts/verify-provider-user-agent.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-provider-text-editing.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-private-signin.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-provider-accounts.cjs
@@ -71,6 +75,14 @@ jobs:
           $searchResult = Join-Path $env:RUNNER_TEMP 'search-editing-result.json'
           $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList @('scripts/verify-search-editing-electron.cjs', ('"' + $searchResult + '"')) -WindowStyle Hidden -PassThru -Wait
           $result = Get-Content -LiteralPath $searchResult -Raw | ConvertFrom-Json
+          Write-Output ($result | ConvertTo-Json -Compress)
+          if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
+
+      - name: Verify provider browser identity
+        run: |
+          $agentResult = Join-Path $env:RUNNER_TEMP 'provider-agent-result.json'
+          $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList @('scripts/verify-provider-user-agent-electron.cjs', ('"' + $agentResult + '"')) -WindowStyle Hidden -PassThru -Wait
+          $result = Get-Content -LiteralPath $agentResult -Raw | ConvertFrom-Json
           Write-Output ($result | ConvertTo-Json -Compress)
           if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
 
