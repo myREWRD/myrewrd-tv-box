@@ -15,7 +15,7 @@ async function editSearch(command,{contents,current,sessionId,diagnose=()=>{}}) 
     while(focused?.shadowRoot?.activeElement)focused=focused.shadowRoot.activeElement;
     const field=c.type==='edit_start'?focused:globalThis[key]?.field.deref();
     if(!field||field!==focused||!field.isConnected||field.disabled||field.readOnly||!field.getClientRects().length)return 'field';
-    if(!field.matches('input[type=search],input[type=text],input:not([type])'))return 'type';
+    if(!field.matches('input[type=search],input[type=text],input:not([type]),textarea'))return 'type';
     if(/username|password|one-time-code|email|cc-/i.test(field.autocomplete||''))return 'autocomplete';
     const search=field.type==='search'||field.getAttribute('role')==='searchbox'||/search|query/i.test([field.name,field.id,field.getAttribute('aria-label'),field.placeholder].join(' '));
     if(!search)return 'search';
@@ -29,7 +29,8 @@ async function editSearch(command,{contents,current,sessionId,diagnose=()=>{}}) 
     if(globalThis[key]?.id!==c.id||globalThis[key]?.session!==c.session)return false;
     if(c.type==='edit_submit'){if(!field.form)return false;HTMLFormElement.prototype.requestSubmit.call(field.form);return true;}
     if(field.maxLength>=0&&c.text.length>field.maxLength)return false;
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,c.text);
+    const prototype=field instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype,'value').set.call(field,c.text);
     field.setSelectionRange(c.start,c.end);
     field.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertReplacementText',data:c.text}));
     field.dispatchEvent(new Event('change',{bubbles:true}));

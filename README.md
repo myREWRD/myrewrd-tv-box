@@ -1,5 +1,9 @@
 # myREWRD TV Box
 
+## Search textarea compatibility (candidate)
+
+Actual 2.3.23 YouTube search refused keyboard binding with diagnostic `type`. The current official YouTube search control is a `textarea` named `search_query`, not an input. Recognized search textareas now use their native value setter with the existing search classification, sensitive-form refusal, focus/session binding and text/selection limits. Arbitrary textareas remain excluded. Unit, private-boundary and real Windows Electron input/textarea fixtures pass; physical acceptance remains pending. Peacock manual sign-in and production promotion remain unverified.
+
 ## 2.3.23 candidate: Peacock existing-account route and search diagnostics
 
 The official Peacock `/signin` route was observed with both email and password fields. Start saved-account and private sessions there instead of the email-only `/start` page, which stayed on an error indicator during actual2.3.22 testing. Existing exact-origin/path and private-session protections remain. This is pending physical acceptance, not proof of sign-in. Search binding now writes only a fixed rejection-stage enum and timestamp to `search-edit-status.json`; no field values, selectors, URLs or credentials are logged. This diagnoses the physical YouTube rejection without weakening field/privacy/loading guards. Native PR35 remains unaccepted and provisioning stays2.3.13.
