@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),vm=require('node:vm');
 const {editSearch}=require('../src/provider-text-editing');
-let allowed=true,url='https://www.youtube.com/',frame={},after=()=>{};
+let allowed=true,url='https://www.youtube.com/',frame={},after=()=>{},loading=false;const reasons=[];
 class Input{
  constructor(){this.type='search';this.buffer='NFL highlights';this.selectionStart=0;this.selectionEnd=14;this.maxLength=256;this.autocomplete='';this.isConnected=true;this.name='search_query';}
  get value(){return this.buffer;}set value(v){this.buffer=v;}
@@ -10,9 +10,9 @@ class Input{
 let submissions=0;class Form{requestSubmit(){submissions++;}}
 const field=new Input(),document={activeElement:field,querySelectorAll:()=>[]},location={href:url};
 const context=vm.createContext({document,location,HTMLInputElement:Input,HTMLFormElement:Form,WeakRef,InputEvent:class{},Event:class{}});
-const contents={get mainFrame(){return frame;},getURL:()=>url,isLoading:()=>false,executeJavaScriptInIsolatedWorld:async(_,[{code}])=>{const result=vm.runInContext(code,context);after();return result;}};
+const contents={get mainFrame(){return frame;},getURL:()=>url,isLoading:()=>loading,executeJavaScriptInIsolatedWorld:async(_,[{code}])=>{const result=vm.runInContext(code,context);after();return result;}};
 const id='11111111-1111-4111-8111-111111111111';
-const apply=(command,sessionId='session')=>editSearch({edit_id:id,...command},{contents,current:()=>allowed,sessionId});
+const apply=(command,sessionId='session')=>editSearch({edit_id:id,...command},{contents,current:()=>allowed,sessionId,diagnose:r=>reasons.push(r)});
 (async()=>{
  field.form=new Form();let r=await apply({type:'edit_start'});assert.equal(r.editing.text,'NFL highlights');
  assert.equal(await apply({type:'edit_update',text:'',start:0,end:0}),true);assert.equal(field.value,'');
@@ -28,5 +28,7 @@ const apply=(command,sessionId='session')=>editSearch({edit_id:id,...command},{c
  after=()=>{frame={};};assert.equal(await apply({type:'edit_start'}),false,'navigation invalidates returned search text');after=()=>{};
  field.buffer='x'.repeat(257);assert.equal(await apply({type:'edit_start'}),false);field.buffer='safe';field.selectionEnd=4;
  for(const command of [{type:'edit_update',text:'x'.repeat(257),start:0,end:0},{type:'edit_update',text:'\n',start:0,end:0},{type:'edit_update',text:'ok',start:-1,end:1}])assert.equal(await apply(command),false);
+ loading=true;assert.equal(await apply({type:'edit_start'}),false);assert.equal(reasons.at(-1),'loading');loading=false;
+ assert.ok(reasons.every(r=>['field','type','autocomplete','search','sensitive','selection','execution','context','loading','connected','binding'].includes(r)),'diagnostics contain fixed reasons only');
  console.log('PASS live search editing: existing query, clear, replace/backspace, exact field/session binding, sensitive/non-search refusal, revoked/navigation and length/selection bounds.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

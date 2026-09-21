@@ -5,7 +5,7 @@ const {denyPrivatePermissions}=require('./private-permissions');
 // Explicit, single-use sign-in delivery. Never persist credentials, export
 // cookies, accept a caller URL, or put a private sign-in window on the TV.
 const HULU_LOGIN='https://auth.hulu.com/web/login/enter-email';
-const PEACOCK_LOGIN='https://www.peacocktv.com/start';
+const PEACOCK_LOGIN='https://www.peacocktv.com/signin';
 function allowedLoginUrl(value,provider='hulu') {
   try {const u=new URL(value);return !u.username&&!u.password&&!u.port&&(provider==='peacock'
     ?u.origin==='https://www.peacocktv.com'&&['/start','/signin'].includes(u.pathname)

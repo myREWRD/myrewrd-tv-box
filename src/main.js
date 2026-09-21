@@ -122,6 +122,7 @@ function requestRemoteRestart() {
 }
 
 const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
+  diagnoseSearch:reason=>{if(['field','type','autocomplete','search','sensitive','selection','execution','context','loading','connected','binding'].includes(reason))fs.writeFileSync(path.join(app.getPath('userData'),'search-edit-status.json'),JSON.stringify({reason,at:new Date().toISOString()}));},
   diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'live-remote-status.json'),JSON.stringify(record)),
   getToken:()=>config.tvToken, getKey:()=>presentationKey, getView:()=>streamView,
   canControl:()=>Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active) && currentMode==='gameday' && !providerAccounts.active && !privateSignIn.active && !presentation.active && !providerWindows.size && !isUpdating),

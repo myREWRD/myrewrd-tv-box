@@ -9,7 +9,7 @@ function previewPage(url) {
   if (!providerPage(url)) return false;
   return !/(?:login|signin|sign-in|signup|sign-up|account|auth|checkout|payment|billing|activate)/i.test(new URL(url).pathname);
 }
-function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, getView, canControl, apply, diagnose = () => {}, fetcher = (...args) => fetch(...args) }) {
+function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, getView, canControl, apply, diagnose = () => {}, diagnoseSearch = () => {}, fetcher = (...args) => fetch(...args) }) {
   let window = null, session = null, lease = 0, polling = false, view = null, blocked = null, generation = 0;
   let capturing = false, lastCapture = 0, sequence = -1, count = 0, bucket = 0, applying = false;
   const file = path.join(__dirname,'pages','live-remote.html');
@@ -120,7 +120,7 @@ function createLiveRemote({ BrowserWindow, ipcMain, apiBase, getToken, getKey, g
     const id = session.id;
     try {
       const current=()=>valid() && session?.id===id;
-      if(['edit_start','edit_update','edit_end','edit_submit'].includes(command.type))return await editSearch(command,{contents:view.webContents,current,sessionId:id});
+      if(['edit_start','edit_update','edit_end','edit_submit'].includes(command.type))return await editSearch(command,{contents:view.webContents,current,sessionId:id,diagnose:diagnoseSearch});
       return await (['text','erase'].includes(command.type)
         ? applyKeyboard(command,{contents:view.webContents,current}) : apply(command,current))==='applied';
     } finally { applying=false; }

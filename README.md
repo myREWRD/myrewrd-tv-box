@@ -1,5 +1,9 @@
 # myREWRD TV Box
 
+## 2.3.23 candidate: Peacock existing-account route and search diagnostics
+
+The official Peacock `/signin` route was observed with both email and password fields. Start saved-account and private sessions there instead of the email-only `/start` page, which stayed on an error indicator during actual2.3.22 testing. Existing exact-origin/path and private-session protections remain. This is pending physical acceptance, not proof of sign-in. Search binding now writes only a fixed rejection-stage enum and timestamp to `search-edit-status.json`; no field values, selectors, URLs or credentials are logged. This diagnoses the physical YouTube rejection without weakening field/privacy/loading guards. Native PR35 remains unaccepted and provisioning stays2.3.13.
+
 ## Provider-account sign-in development (2026-09-20, unreleased)
 
 The new receiver polls a separate authenticated `/api/tv-provider-accounts` endpoint for one-shot, short-lived account jobs. It uses a hidden sandboxed provider window sharing this box's existing session, pauses live remote control, rejects duplicate jobs and stops on key/context changes. Credentials are transient and never written to config, logs or command receipts. Only the observed Hulu email/password forms are implemented; unknown verification steps require attention. A submitted form is not verified playback. The canonical dashboard `docs/security/TV_PROVIDER_ACCOUNTS.md` defines the vault and release gates. Package 2.3.14 is an unaccepted candidate; provisioning remains accepted 2.3.13 until validation and promotion.
