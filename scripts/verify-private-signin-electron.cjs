@@ -1,9 +1,9 @@
 const {app,BrowserWindow,protocol}=require('electron');
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
 const {createPrivateSignIn}=require('../src/private-signin');
-const resultPath=process.env.TV_PRIVATE_FIXTURE_RESULT;
+const resultPath=process.argv[2];
 const record=value=>{if(resultPath)fs.writeFileSync(resultPath,JSON.stringify(value));};
-app.setPath('userData',path.join(process.env.TEMP||app.getPath('temp'),'myrewrd-private-signin-fixture-'+process.pid));
+app.setPath('userData',path.join(app.getPath('temp'),'myrewrd-private-signin-fixture-'+process.pid));
 app.on('window-all-closed',()=>{});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 app.whenReady().then(async()=>{
