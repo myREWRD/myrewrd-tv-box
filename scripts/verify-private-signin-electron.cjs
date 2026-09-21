@@ -17,11 +17,13 @@ app.whenReady().then(async()=>{
   const remote=createPrivateSignIn({BrowserWindow:Window,ipcMain:{handle:(name,fn)=>handlers[name]=fn},apiBase:'https://fixture.invalid',getToken:()=> 'fixture',getKey:()=> 'fixture',canStart:()=>true,onStart(){},fetcher:async()=>({ok:true,json:async()=>({session:{kind:'provider-sign-in',id:'fixture',provider:'peacock',lease_ms:8000,offer:{type:'offer',sdp:'v=0'}}})})});
   try{
     await remote.tick();const wc=windows[0].webContents,transport=windows[1].webContents;
-    const event={sender:transport,senderFrame:transport.mainFrame};
-    let image;for(let i=0;i<30&&!image;i++){await delay(150);image=await handlers['tv-signin-frame'](event);}
+    // A real IPC event carries the current frame. Do not retain the initial
+    // about:blank frame across the transport's asynchronous loadFile navigation.
+    const event=()=>({sender:transport,senderFrame:transport.mainFrame});
+    let image;for(let i=0;i<80&&!image;i++){await delay(150);image=await handlers['tv-signin-frame'](event());}
     assert.ok(image?.jpeg,'hidden provider supplies a frame before full page load');
     assert.ok(windows.every(w=>!w.isVisible()),'no private window appears on desktop');
-    const send=(seq,command)=>handlers['tv-signin-input'](event,{seq,generation:image.generation,command});
+    const send=(seq,command)=>handlers['tv-signin-input'](event(),{seq,generation:image.generation,command});
     assert.equal(await send(1,{type:'point',x:100/1100,y:45/800,click:true}),true);
     await delay(50);assert.equal(await send(2,{type:'text',text:'fixture@example.invalid'}),true);
     // Fixture-only DOM inspection; never used on a provider page.
