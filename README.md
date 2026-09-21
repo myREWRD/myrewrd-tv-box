@@ -1,5 +1,12 @@
 # myREWRD TV Box
 
+
+## 2026-09-21 accepted 2.3.25 release
+
+Supersedes earlier candidate/pending notes below. PR35 is merged. Both Windows CI workflows pass; the production-signed build updated the existing physical test box. Peacock restored video, and dashboard Unmute restored sound (owner confirmed). Actual YouTube search type/clear/replace/Backspace and submit navigation passed with the unchanged search implementation. The provider label tracks actual box state in dashboard and phone (owner confirmed), with no provider URL/account data reported. Seven-app OTA35645974490 succeeded.
+
+The immutable2.3.25 ZIP and setup installer are published and pass the public provisioning-release verifier. DashboardPR2066 aligns new-device/migration pins. Existing display/audio/timezone/recovery setup remains included. Fleet offers are separate. Only the paired box was available; fresh hardware/power/HDMI and universal fresh sign-in acceptance are not claimed. Channel-change shortcuts are excluded.
+
 ## 2.3.24 candidate: Peacock browser compatibility
 
 On the paired Windows TV, Peacock account lookup returned HTTP 422 in the embedded browser while the same account signed in and played with sound in Chrome on that box. A temporary DevTools Chrome/Windows identity override let the embedded browser accept the same email and reach the password form. Candidate 2.3.24 removes only Electron/myREWRD product tokens from the real Chromium user agent for exact Peacock HTTPS pages, including saved-account and private sign-in windows. Other providers restore the original identity. Chromium/OS versions, cookies, sandbox, navigation, permissions and DRM remain unchanged. Permanent-build authentication and playback acceptance are still required; this is not yet a production release.
@@ -10,7 +17,7 @@ Actual 2.3.23 YouTube search refused keyboard binding with diagnostic `type`. Th
 
 ## 2.3.23 candidate: Peacock existing-account route and search diagnostics
 
-The official Peacock `/signin` route was observed with both email and password fields. Start saved-account and private sessions there instead of the email-only `/start` page, which stayed on an error indicator during actual2.3.22 testing. Existing exact-origin/path and private-session protections remain. This is pending physical acceptance, not proof of sign-in. Search binding now writes only a fixed rejection-stage enum and timestamp to `search-edit-status.json`; no field values, selectors, URLs or credentials are logged. This diagnoses the physical YouTube rejection without weakening field/privacy/loading guards. Native PR35 remains unaccepted and provisioning stays2.3.13.
+The official Peacock `/signin` route was observed with both email and password fields. Start saved-account and private sessions there instead of the email-only `/start` page, which stayed on an error indicator during actual2.3.22 testing. Existing exact-origin/path and private-session protections remain. This is pending physical acceptance, not proof of sign-in. Search binding now writes only a fixed rejection-stage enum and timestamp to the local runtime-generated search-edit-status.json diagnostic file; no field values, selectors, URLs or credentials are logged. This diagnoses the physical YouTube rejection without weakening field/privacy/loading guards. Native PR35 remains unaccepted and provisioning stays2.3.13.
 
 ## Provider-account sign-in development (2026-09-20, unreleased)
 
