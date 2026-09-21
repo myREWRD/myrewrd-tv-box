@@ -82,7 +82,8 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     try {
       const image=await target.webContents.capturePage();
       if(!valid()||run!==generation||document!==doc||target!==providerWindow||target.webContents.getURL()!==doc.url||!allowedLoginUrl(doc.url,session.provider))return null;
-      const jpeg=image.resize({width:960}).toJPEG(50);
+      let jpeg=image.resize({width:960}).toJPEG(50);
+      if(jpeg.length>60000)jpeg=image.resize({width:640}).toJPEG(30);
       return jpeg.length<=60000?{generation:doc.generation,jpeg:jpeg.toString('base64')}:null;
     }catch{if(run===generation&&target===providerWindow)stop();return null;}finally{if(capturing===capture)capturing=null;}
   });
