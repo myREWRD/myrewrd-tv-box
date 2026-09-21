@@ -7,9 +7,11 @@ function allowedLoginUrl(value,provider='hulu') {
     ?u.origin==='https://www.peacocktv.com'&&['/start','/signin'].includes(u.pathname)
     :provider==='hulu'&&u.origin==='https://auth.hulu.com'&&/^\/web\/login(?:\/|$)/.test(u.pathname));}catch{return false;}
 }
-function validJob(job,now=Date.now()) {
+function validJob(job,now=Date.now(),remainingMs) {
   return job&&/^[a-f0-9-]{36}$/i.test(job.id||'')&&['hulu','peacock'].includes(job.provider)
-    &&Date.parse(job.expires_at)>now&&Date.parse(job.expires_at)<=now+120000
+    &&Number.isFinite(Date.parse(job.expires_at))
+    &&(remainingMs===undefined ? Date.parse(job.expires_at)>now&&Date.parse(job.expires_at)<=now+120000
+      : Number.isFinite(remainingMs)&&remainingMs>0&&remainingMs<=120000)
     &&typeof job.credentials?.username==='string'&&job.credentials.username.length>0&&job.credentials.username.length<=320
     &&typeof job.credentials?.password==='string'&&job.credentials.password.length>0&&job.credentials.password.length<=1024;
 }
@@ -45,8 +47,8 @@ function playbackReturn(value,provider='hulu') {
     ?u.origin==='https://www.peacocktv.com'&&['/watch/home','/watch/profiles'].includes(u.pathname)
     :provider==='hulu'&&u.origin==='https://www.hulu.com'&&['/','/hub/home','/profiles'].includes(u.pathname));}catch{return false;}
 }
-async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Date.now,delay=ms=>new Promise(resolve=>setTimeout(resolve,ms)),diagnose=()=>{}}) {
-  if(!validJob(job,now())||signal.aborted||!isCurrent())return 'failed';
+async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Date.now,remaining,delay=ms=>new Promise(resolve=>setTimeout(resolve,ms)),diagnose=()=>{}}) {
+  if(!validJob(job,now(),remaining?.())||signal.aborted||!isCurrent())return 'failed';
   const provider=job.provider;
   const finish=(status,reason)=>{diagnose(reason);return status;};
   let window;let privateSession;const attempted=new Set();let passwordSubmitted=false;
@@ -82,7 +84,7 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
       // page load; exact-document checks below still gate every credential.
       let navigationFailed=false,formInspectionStarted=false;
       void contents.loadURL(provider==='peacock'?PEACOCK_LOGIN:HULU_LOGIN).catch(()=>{if(!formInspectionStarted)navigationFailed=true;});
-      while(!signal.aborted&&isCurrent()&&!window.isDestroyed()&&now()<Date.parse(job.expires_at)-12000) {
+      while(!signal.aborted&&isCurrent()&&!window.isDestroyed()&&(remaining?remaining()>12000:now()<Date.parse(job.expires_at)-12000)) {
         if(navigationFailed)return finish('failed','navigation_failed');
         if(denied)return finish('manual_required','redirect_blocked');
         if(permissionRequested)return finish('manual_required','permission_required');

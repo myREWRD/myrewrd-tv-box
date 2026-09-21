@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');const {runHuluLogin,allowedLoginUrl,validJob,credentialStepCode}=require('../src/provider-account-login');
 const {createProviderAccounts}=require('../src/provider-accounts');
-const now=1000000;const makeJob=()=>({id:'11111111-1111-4111-8111-111111111111',provider:'hulu',expires_at:new Date(now+120000).toISOString(),credentials:{username:'fixture@example.invalid',password:'test-only-fixture'}});
+const now=1000000;const makeJob=()=>({id:'11111111-1111-4111-8111-111111111111',provider:'hulu',remaining_ms:120000,expires_at:new Date(now+120000).toISOString(),credentials:{username:'fixture@example.invalid',password:'test-only-fixture'}});
 for(const url of ['http://auth.hulu.com/web/login','https://auth.hulu.com.evil.invalid/web/login','https://evil@auth.hulu.com/web/login','https://auth.hulu.com:444/web/login','https://auth.hulu.com/web/signup'])assert.equal(allowedLoginUrl(url),false);
 assert.equal(allowedLoginUrl('https://auth.hulu.com/web/login/enter-password'),true);
 assert.equal(allowedLoginUrl('https://www.peacocktv.com/signin','peacock'),true);
@@ -38,7 +38,7 @@ class FakeWindow {
  mode='normal';
  let polls=0,logins=0,privateStarts=0,reports=[];job=makeJob();
  const worker=createProviderAccounts({BrowserWindow:FakeWindow,apiBase:'https://example.invalid',getToken:()=> 'test-token',getKey:()=> 'test-key',canPoll:()=>true,onPrivateStart:()=>privateStarts++,now:()=>now,
-  fetcher:async(url,options)=>{const body=JSON.parse(options.body);if(body.action==='report'){reports.push(body);return {ok:true};}polls++;return {ok:true,text:async()=>JSON.stringify({job})};},
+  fetcher:async(url,options)=>{const body=JSON.parse(options.body);if(body.action==='report'){reports.push(body);return {ok:true,text:async()=>JSON.stringify({ok:true})};}polls++;return {ok:true,text:async()=>JSON.stringify({job})};},
   login:async()=>{logins++;assert.equal(worker.active,true);return 'submitted';}});
  await worker.tick();await worker.tick();assert.equal(logins,1);assert.equal(privateStarts,1);assert.equal(worker.active,false);assert.equal(reports.length,1);assert.equal(JSON.stringify(reports).includes('test-only-fixture'),false);
  let key='first',aborted=false;
@@ -49,9 +49,29 @@ class FakeWindow {
  // before the lock releases, while reporting retains its own live signal.
  let privateClosed=false,lateResolve,timeoutReports=[];
  const deadlineWorker=createProviderAccounts({BrowserWindow:FakeWindow,apiBase:'https://example.invalid',getToken:()=> 'test-token',getKey:()=> 'test-key',canPoll:()=>true,onPrivateStart:()=>{},
- fetcher:async(_url,options)=>{const body=JSON.parse(options.body);if(body.action==='report'){assert.equal(privateClosed,true);assert.equal(options.signal.aborted,false);timeoutReports.push(body);return {ok:true};}return {ok:true,text:async()=>JSON.stringify({job:{...makeJob(),expires_at:new Date(Date.now()+12040).toISOString()}})};},
+ fetcher:async(_url,options)=>{const body=JSON.parse(options.body);if(body.action==='report'){assert.equal(privateClosed,true);assert.equal(options.signal.aborted,false);timeoutReports.push(body);return {ok:true,text:async()=>JSON.stringify({ok:true})};}return {ok:true,text:async()=>JSON.stringify({job:{...makeJob(),remaining_ms:12040,expires_at:new Date(Date.now()+12040).toISOString()}})};},
  login:({signal})=>new Promise(resolve=>{lateResolve=resolve;signal.addEventListener('abort',()=>{privateClosed=true;},{once:true});})});
  await deadlineWorker.tick();assert.equal(deadlineWorker.active,false);assert.deepEqual(timeoutReports.map(({status,reason})=>({status,reason})),[{status:'failed',reason:'attempt_expired'}]);
  lateResolve('submitted');await new Promise(resolve=>setImmediate(resolve));assert.equal(timeoutReports.length,1);
+
+ // Database-relative budgets must survive skewed and jumping Windows clocks.
+ for(const wall of [now-86400000,now+86400000]) {
+   let local=wall,mono=100,started=0;const diagnostics=[];
+   const skewWorker=createProviderAccounts({BrowserWindow:FakeWindow,apiBase:'https://example.invalid',getToken:()=> 'fixture-token',getKey:()=> 'fixture-key',canPoll:()=>true,onPrivateStart:()=>{},now:()=>local,monotonic:()=>mono,diagnose:r=>diagnostics.push(r),
+    fetcher:async(_u,o)=>{if(JSON.parse(o.body).action==='report')return {ok:true,text:async()=>'{"ok":true}'};mono+=700;return {ok:true,text:async()=>JSON.stringify({job:makeJob()})};},
+    login:async({remaining})=>{started++;assert.equal(remaining(),119300);local+=172800000;mono+=300;assert.equal(remaining(),119000);return 'submitted';}});
+   await skewWorker.tick();await skewWorker.tick();assert.equal(started,1);assert.ok(diagnostics.some(r=>r.events.some(e=>e.stage==='report_accepted')));
+   assert.ok(!JSON.stringify(diagnostics).includes('fixture-token'));assert.ok(!JSON.stringify(diagnostics).includes('fixture@example'));
+ }
+ for(const scenario of ['invalid-budget','slow-response','private-start','bad-report','non-json','poll-error','cancelled']) {
+   let mono=0,called=0,sent=0,events=[],eligible=true;
+   const worker=createProviderAccounts({BrowserWindow:FakeWindow,apiBase:'https://example.invalid',getToken:()=> 'fixture-token',getKey:()=> 'fixture-key',canPoll:()=>eligible,now:()=>now,monotonic:()=>mono,diagnose:r=>{events=r.events;},
+    onPrivateStart:()=>{if(scenario==='private-start')throw Error('secret-bearing exception must not escape');if(scenario==='cancelled')eligible=false;},
+    fetcher:async(_u,o)=>{if(JSON.parse(o.body).action==='report'){sent++;return {ok:true,text:async()=>scenario==='bad-report'?'{"ok":false}':'{"ok":true}'};}if(scenario==='poll-error')return {ok:false};if(scenario==='slow-response')mono+=119000;return {ok:true,text:async()=>scenario==='non-json'?'bad json':JSON.stringify({job:{...makeJob(),remaining_ms:scenario==='invalid-budget'?120001:120000}})};},
+    login:async()=>{called++;return 'submitted';}});
+   await worker.tick();assert.equal(worker.active,false);
+   assert.equal(called,scenario==='bad-report'?1:0);assert.equal(sent,['private-start','bad-report'].includes(scenario)?1:0);
+   assert.equal(events.at(-1).stage,{'invalid-budget':'invalid_job','slow-response':'insufficient_budget','private-start':'report_accepted','bad-report':'report_rejected','non-json':'request_failed','poll-error':'poll_rejected','cancelled':'cancelled'}[scenario]);
+ }
  console.log('PASS provider accounts: exact origins, bounded jobs, hidden sandboxed window, fixed email/password steps, challenge refusal, cleanup, private lock and no credential replay/report leakage.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

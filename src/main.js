@@ -130,6 +130,7 @@ const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
 });
 
 const providerAccounts=createProviderAccounts({BrowserWindow,apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+  diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'provider-account-status.json'),JSON.stringify(record)),
   canPoll:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size),
   onPrivateStart:()=>{liveRemote.stop();providerResume.cancel();}});
 
