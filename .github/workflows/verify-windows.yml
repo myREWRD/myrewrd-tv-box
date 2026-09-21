@@ -62,6 +62,8 @@ jobs:
           $privateResult = Join-Path $env:RUNNER_TEMP 'private-signin-result.json'
           $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList @('scripts/verify-private-signin-electron.cjs', ('"' + $privateResult + '"')) -WindowStyle Hidden -PassThru -Wait
           $result = Get-Content -LiteralPath $privateResult -Raw | ConvertFrom-Json
+          Write-Output ("Private fixture exit: " + $fixture.ExitCode)
+          Write-Output ($result | ConvertTo-Json -Compress)
           if ($fixture.ExitCode -ne 0 -or $result.ok -ne $true) { exit 1 }
 
       - name: Verify real Windows process identity
