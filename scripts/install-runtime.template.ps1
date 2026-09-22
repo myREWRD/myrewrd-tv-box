@@ -2,7 +2,7 @@
 param([switch]$NoRestart)
 $ErrorActionPreference = 'Stop'
 $env:PSModulePath = "$PSHOME\Modules"
-if ([Security.Principal.WindowsIdentity]::GetCurrent().Name -ine ($env:COMPUTERNAME+'\myrewrd')) { throw 'Run under the dedicated myrewrd Windows account as administrator.' }
+if ([Security.Principal.WindowsIdentity]::GetCurrent().Name -inotmatch ('^' + [regex]::Escape($env:COMPUTERNAME) + '\\(?:myrewrd|KUEVY)$')) { throw 'Run under the dedicated local KUEVY or myrewrd Windows account as administrator.' }
 Add-Type -TypeDefinition @"
 using System;
 using System.Text;
