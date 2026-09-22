@@ -12,6 +12,7 @@ for(const [identity,allowed] of [['TV.TEST\\KUEVY',true],['tv.test\\kuevy',true]
  const result=execFileSync(ps,['-NoProfile','-Command',`$env:COMPUTERNAME='TV.TEST';$testIdentity=${quote(identity)};try { ${identityProbe}; 'allowed' } catch { 'denied' }`],{windowsHide:true,encoding:'utf8'}).trim();
  assert.equal(result,allowed?'allowed':'denied',identity);
 }
+console.log('PASS 9 local account identity cases; no account settings changed.');
 const source=path.join(root,'payload');fs.mkdirSync(path.join(source,'resources'),{recursive:true});
 const bytes=Buffer.alloc(11000000);bytes.write('MZ');fs.writeFileSync(path.join(source,'myREWRD TV Box.exe'),bytes);fs.writeFileSync(path.join(source,'resources','app.asar'),'fixture');fs.writeFileSync(path.join(source,'runtime-release.json'),JSON.stringify({version:'2.0.0',layout:'installed-ab-v1'}));
 const zip=path.join(root,'runtime.zip');execFileSync(ps,['-NoProfile','-Command',`Add-Type -AssemblyName System.IO.Compression.FileSystem;[IO.Compression.ZipFile]::CreateFromDirectory(${quote(source)},${quote(zip)})`],{windowsHide:true});
