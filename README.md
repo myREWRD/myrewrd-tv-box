@@ -1,5 +1,10 @@
 # myREWRD TV Box
 
+## 2026-09-22 — KUEVY local provisioning account
+
+The 2.3.26 installer accepts the dedicated local administrator account **KUEVY** (recommended for new boxes) or **myrewrd** (existing boxes), case-insensitively. Domain/personal account identities remain rejected. Runtime, AppData and Startup paths use the current profile; existing pairing/provider sessions are not renamed or moved. The standalone power repair accepts the same two accounts. The companion dashboard change must update generated auto-login, display/audio checks and remote-maintenance setup together, and pin the signed 2.3.26 ZIP and versioned installer. Do not overwrite 2.3.25 assets. This release changes setup compatibility; provider/player source is unchanged. Automated identity and isolated installer tests do not replace first-time KUEVY hardware/reboot acceptance on the new Sugarshack Downtown box.
+
+
 
 ## 2026-09-21 accepted 2.3.25 release
 
