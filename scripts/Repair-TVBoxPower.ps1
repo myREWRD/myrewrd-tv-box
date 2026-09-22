@@ -2,11 +2,11 @@
 # Does not install software, change passwords, or change pairing configuration.
 #Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
-if ($env:USERNAME -ne 'myrewrd') {
-    throw 'Run only from the dedicated local myrewrd TV appliance account.'
+if ($env:USERNAME -notin @('myrewrd', 'KUEVY')) {
+    throw 'Run only from the dedicated local KUEVY or myrewrd TV appliance account.'
 }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-if ($identity -ne ($env:COMPUTERNAME + '\myrewrd')) {
+if ($identity -inotmatch ('^' + [regex]::Escape($env:COMPUTERNAME) + '\\(?:myrewrd|KUEVY)$')) {
     throw 'A dedicated local account is required; domain accounts are not supported.'
 }
 foreach ($source in @('AC', 'DC')) {
