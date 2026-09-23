@@ -24,6 +24,8 @@ jobs:
       - name: Source regressions
         run: |
           node scripts/verify-provider-user-agent.cjs
+          node scripts/verify-wifi-setup.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-provider-display-status.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-provider-text-editing.cjs

@@ -287,3 +287,8 @@ TV Box2.3.25 reports allowlisted mode/provider IDs only. Dashboard/API expires t
 ## 2026-09-21 — GitHub action runtime migration
 
 The CI migration pins verified Node 24 actions while preserving existing application/build Node versions, dependencies and release targets. Workflow-only edits build on pull requests and no longer trigger a production main build. Playback approval and source/package/script release triggers remain. No installer or firmware publication is part of this migration.Canonical evidence, test limitations and recovery: [CI runtime migration](https://github.com/myREWRD/ssdt-dashboard/blob/main/docs/operations/CI_RUNTIME_MIGRATION_2026_09.md). Rollout is pending exact-head CI and independent review.
+# Destination Wi-Fi delivery (2.3.28 candidate)
+
+The platform dashboard can send a destination WPA2-Personal network to one enrolled, online TV Box. The new receiver retrieves a device-bound expiring credential job and saves a current-user Windows WLAN profile through a hidden stdin-only helper. It keeps existing profiles, does not explicitly connect, stages the network at lowest priority and disables auto-switch. Credentials never enter process arguments, logs or profile XML files. Only a non-secret job/result receipt is persisted by the receiver; Windows retains the network profile.
+
+This is a candidate, not an approved provisioning release. Physical saved-profile/current-connection and playback acceptance are required before promoting2.3.28;2.3.27 remains the approved installer until then. See the dashboard repository's `docs/security/TV_WIFI_DELIVERY.md` for backend authorization, private migration, expiry cleanup, limits and release procedure. No mobile update is required.

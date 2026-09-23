@@ -18,6 +18,7 @@ const { providerDisplayStatus } = require("./provider-display-status");
 const { createLiveRemote } = require("./live-remote");
 const { createPrivateSignIn } = require("./private-signin");
 const { createProviderAccounts } = require("./provider-accounts");
+const { createWifiSetup } = require("./wifi-setup");
 const { gameDayUrl } = require("./game-day-url");
 const { createGameDayProvider, HOMES, resumeUrl } = require("./game-day-provider");
 const { createProtectedPlayback } = require("./protected-playback");
@@ -145,6 +146,11 @@ const providerAccounts=createProviderAccounts({BrowserWindow,apiBase:API_BASE,ge
 const privateSignIn=createPrivateSignIn({BrowserWindow,ipcMain,apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
   canStart:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size&&!providerAccounts.active),
   onStart:()=>{providerAccounts.stop();liveRemote.stop();providerResume.cancel();}});
+
+const wifiSetup=createWifiSetup({apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+  canPoll:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating),
+  readReceipt:()=>JSON.parse(fs.readFileSync(path.join(app.getPath('userData'),'wifi-setup-receipt.json'),'utf8')),
+  writeReceipt:receipt=>fs.writeFileSync(path.join(app.getPath('userData'),'wifi-setup-receipt.json'),JSON.stringify(receipt))});
 
 function restoreBoard() {
   providerAccounts.stop();
@@ -484,6 +490,7 @@ function startPolling() {
 }
 
 async function pollForCommands() {
+  void wifiSetup.tick();
   void providerAccounts.tick();
   void privateSignIn.tick();
   void providerRemote.tick();

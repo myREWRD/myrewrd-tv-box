@@ -60,6 +60,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       if (name === './enrollment') return require('../src/enrollment');
       if (name === './live-remote') return { createLiveRemote: () => ({ tick: async () => {}, stop() {}, dispose() {} }) };
       if (name === './provider-accounts') return { createProviderAccounts: () => ({active:false,tick:async()=>{},stop(){this.active=false;}}) };
+      if (name === './wifi-setup') return { createWifiSetup: () => ({active:false,tick:async()=>{}}) };
       if (name === './private-signin') return { createPrivateSignIn: () => ({active:false,tick:async()=>{},stop(){this.active=false;}}) };
       if (name === './game-day-url') return require('../src/game-day-url');
       if (name === './game-day-provider') return require('../src/game-day-provider');
