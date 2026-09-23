@@ -13,6 +13,9 @@ const details={ssid:'Venue & " Wi-Fi',password:'Fixture<>&123'},id='00000000-000
  const script=fs.readFileSync('src/save-wifi.ps1','utf8');assert(!/WlanConnect|wlan connect|WriteAllText|key=clear|Write-Host/.test(script));assert.match(script,/WlanSetProfilePosition/);assert.match(script,/<autoSwitch>false/);assert.match(script,/return "existing_network"/);
  if(process.platform==='win32') {
   const {spawnSync}=require('node:child_process');
+  const compilation=script.match(/Add-Type[^\r\n]*@'[\s\S]*?\r?\n'@/)[0];
+  const compiled=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',"$ErrorActionPreference='Stop'; "+compilation],{windowsHide:true,encoding:'utf8'});
+  assert.equal(compiled.status,0,'Windows PowerShell must compile the actual WLAN helper: '+compiled.stderr);
   const encoding=script.match(/^\[Console\]::InputEncoding.*$/m)[0];
   const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',encoding+'; $v=[Console]::In.ReadToEnd() | ConvertFrom-Json; [Console]::Out.Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($v.ssid)))'],{windowsHide:true,input:JSON.stringify({ssid:'Café 海辺'}),encoding:'utf8'});
   assert.equal(result.status,0);assert.equal(Buffer.from(result.stdout,'base64').toString('utf8'),'Café 海辺');

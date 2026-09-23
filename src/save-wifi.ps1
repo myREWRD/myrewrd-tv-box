@@ -10,7 +10,7 @@ try {
  $ssid = [string]$value.ssid
  $password = [string]$value.password
  if ([Text.Encoding]::UTF8.GetByteCount($ssid) -lt 1 -or [Text.Encoding]::UTF8.GetByteCount($ssid) -gt 32 -or $ssid -match '[\x00-\x1f\x7f]' -or ($password -notmatch '^[\x20-\x7e]{8,63}$' -and $password -notmatch '^[a-fA-F0-9]{64}$')) { throw 'invalid' }
- Add-Type -TypeDefinition @'
+ Add-Type -ReferencedAssemblies 'System.dll','System.Xml.dll' -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class WifiSave {
