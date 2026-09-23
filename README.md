@@ -1,5 +1,11 @@
 # myREWRD TV Box
 
+## 2026-09-23 — Unified 2.3.27 release (candidate)
+
+The candidate advances the runtime to2.3.27 so the companion dashboard setup and software-update controls share one visible version. Player/provider behavior is unchanged from2.3.26. The dashboard retains the complete Windows/clock/display/audio/Chrome/Google setup workflow and uses the approved provisioning version for fleet Push latest update. Software OTA does not rerun Windows setup or enroll a Google account. Existing settings and provider profiles remain in place.
+
+Production signing, public ZIP/setup digest verification and actual-box updater acceptance are required before this candidate is promoted. Keep2.3.26 immutable. See the dashboard canonical release-status record for delivery evidence; a branch version bump is not a published or installed release.
+
 ## 2026-09-22 — KUEVY local provisioning account
 
 The 2.3.26 installer accepts the dedicated local administrator account **KUEVY** (recommended for new boxes) or **myrewrd** (existing boxes), case-insensitively. Domain/personal account identities remain rejected. Runtime, AppData and Startup paths use the current profile; existing pairing/provider sessions are not renamed or moved. The standalone power repair accepts the same two accounts. The companion dashboard change must update generated auto-login, display/audio checks and remote-maintenance setup together, and pin the signed 2.3.26 ZIP and versioned installer. Do not overwrite 2.3.25 assets. This release changes setup compatibility; provider/player source is unchanged. Automated identity and isolated installer tests do not replace first-time KUEVY hardware/reboot acceptance on the new Sugarshack Downtown box.
