@@ -17,7 +17,7 @@ async function poll() {
   busy = true;
   try {
     const data = await window.presentation.signal();
-    document.getElementById('device').textContent = data.device_name || 'myREWRD TV';
+    document.getElementById('device').textContent = data.device_name || 'KUEVY TV';
     if (pendingAnswer) { await window.presentation.signal(pendingAnswer); pendingAnswer = null; answerDelivered = true; }
     if (data.has_answer && !peer) {
       await window.presentation.signal({ type: 'restart' });
