@@ -1,5 +1,11 @@
 # myREWRD TV Box
 
+## September 26 — KUEVY presentation screen (2.3.30 candidate)
+
+Presentation mode now displays the owner-supplied KUEVY horizontal PNG logo and the human-facing app.kuevy.com address. The logo is bundled locally for offline startup; only same-origin images are added to the receiver CSP. Device names remain the actual configured labels (including the myREWRD venue), with KUEVY TV used only as the empty-name fallback. Pairing, backend origins, storage, provider sessions and screen-sharing behavior are unchanged.
+
+This requires a new immutable runtime; installed2.3.29 boxes retain the old screen until updated. Do not overwrite2.3.29 or advance fleet/setup pins from this source change alone. Windows build, independent review, signed artifact/updater acceptance and coordinated dashboard provisioning remain release gates. The supplied asset is copied byte-for-byte from the approved kuevy_horizontal_lockup.png.
+
 ## 2026-09-23 — Unified 2.3.27 release (candidate)
 
 The candidate advances the runtime to2.3.27 so the companion dashboard setup and software-update controls share one visible version. Player/provider behavior is unchanged from2.3.26. The dashboard retains the complete Windows/clock/display/audio/Chrome/Google setup workflow and uses the approved provisioning version for fleet Push latest update. Software OTA does not rerun Windows setup or enroll a Google account. Existing settings and provider profiles remain in place.
