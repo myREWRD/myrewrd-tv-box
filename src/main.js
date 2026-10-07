@@ -1,8 +1,10 @@
 // myREWRD TV Box — Main Electron Process
 // Manages: pairing, mode switching, HTTP polling control, DRM streaming, sponsor overlay, auto-update
 
-const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage, components } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage, components, dialog, globalShortcut } = require("electron");
 const path = require("path");
+const {createResetReuse} = require("./reset-reuse");
+const {spawn} = require("node:child_process");
 const fs = require("fs");
 const { prepareUpdate, createCandidate, blockedVersion, currentProcessIdentity } = require("./update");
 const { normalizeSponsorPayload } = require("./sponsor");
@@ -27,7 +29,7 @@ const protectedPlayback = createProtectedPlayback({ components });
 // Recovery may race a completed restart if its result could not be written.
 // Only one process may own this device profile and visible board.
 if (!app.requestSingleInstanceLock()) app.exit(0);
-app.on("second-instance", () => { if (mainWindow) restoreBoard(); });
+app.on("second-instance", (_event,argv) => { if(argv.includes("--kuevy-reset")) void resetReuse.reset(); else if(mainWindow && !readyMessage) restoreBoard(); });
 
 function navigate(contents, url) {
   if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
@@ -68,6 +70,8 @@ const API_BASE = "https://app.myrewrd.com";
 const APP_VERSION = app.getVersion(); // reads from package.json "version"
 const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.join(app.getPath("home"), "myREWRD-TV-Box");
 
+let readyMessage = null;
+let healthTimer = null;
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
 let streamPairingToken = null;
@@ -76,6 +80,18 @@ let streamRetry = null;
 let streamTarget = null;
 let overlayWindow = null; // Transparent overlay for sponsor bar
 let config = loadConfig();
+const resetIdentity = {...config};
+const resetReuse = createResetReuse({app,dialog,safeStorage,getConfig:()=>resetIdentity,saveConfig:value=>{Object.assign(resetIdentity,value);saveConfig(value);},apiBase:API_BASE,isUpdating:()=>isUpdating || wifiSetup.active || providerAccounts.active || privateSignIn.active,restoreActive:()=>{readyMessage=null;config={...resetIdentity};restoreBoard();},showReady:message=>{
+  readyMessage=message;config={paired:false};
+  if(mainWindow){
+    providerAccounts.stop();privateSignIn.stop();liveRemote.stop();providerRemote.stop();remoteStatus.stop();enrollment.stop();presentation.stop();
+    if(pollController)pollController.abort();
+    for(const window of providerWindows)if(!window.isDestroyed())window.close();
+    if(streamView){mainWindow.removeBrowserView(streamView);streamView.webContents.close();streamView=null;}
+    if(overlayWindow&&!overlayWindow.isDestroyed()){overlayWindow.close();overlayWindow=null;}
+  }
+  if(mainWindow) mainWindow.loadFile(path.join(__dirname,"ready-to-provision.html"),{query:{state:message}}).catch(()=>{});
+}});
 const gameDayProvider = createGameDayProvider({getConfig:()=>config,save:saveConfig});
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
 let boardStatus = "connecting";
@@ -153,6 +169,7 @@ const wifiSetup=createWifiSetup({apiBase:API_BASE,getToken:()=>config.tvToken,ge
   writeReceipt:receipt=>fs.writeFileSync(path.join(app.getPath('userData'),'wifi-setup-receipt.json'),JSON.stringify(receipt))});
 
 function restoreBoard() {
+  if(readyMessage){if(mainWindow)mainWindow.loadFile(path.join(__dirname,"ready-to-provision.html"),{query:{state:readyMessage}}).catch(()=>{});return;}
   providerAccounts.stop();
   privateSignIn.stop();
   liveRemote.stop();
@@ -184,7 +201,6 @@ function loadConfig() {
   const searchPaths = [
     path.join(INSTALL_DIR, "config.json"),
     path.join(path.dirname(process.execPath), "config.json"),
-    "C:\\Users\\myrewrd\\myREWRD-TV-Box\\config.json",
     path.join(process.env.USERPROFILE || "", "myREWRD-TV-Box", "config.json"),
   ];
   for (const p of searchPaths) {
@@ -193,8 +209,7 @@ function loadConfig() {
         const data = JSON.parse(fs.readFileSync(p, "utf-8"));
         if (data.tvToken) {
           // Migrate to AppData location for future reads
-          fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-          fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
+          if(!fs.existsSync(path.join(app.getPath('home'),'.kuevy-reset','state.json'))){fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));}
           console.log("[TV Box] Found config at", p, "- migrated to AppData");
           return data;
         }
@@ -212,6 +227,7 @@ function saveConfig(data) {
     data={...data,gameDayProvider:null,gameDayResumeUrls:null};
   }
   config = { ...config, ...data };
+  if(!readyMessage)Object.assign(resetIdentity,config);
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
@@ -271,7 +287,9 @@ function createMainWindow() {
   mainWindow.webContents.on("render-process-gone", () => { boardStatus = "failed"; recovery.schedule(5000); });
 
   // Start in pairing mode or regular TV board
-  if (!config.paired || !config.tvToken) {
+  if (readyMessage) {
+    mainWindow.loadFile(path.join(__dirname,"ready-to-provision.html"),{query:{state:readyMessage}}).catch(()=>{});
+  } else if (!config.paired || !config.tvToken) {
     mainWindow.loadURL(`${API_BASE}/tv/pair`).catch(() => {});
   } else {
     switchMode("regular");
@@ -284,6 +302,7 @@ function createMainWindow() {
 
 // ─── Mode Switching ─────────────────────────────────────────────────────────
 function switchMode(mode, options = {}) {
+  if(readyMessage)return;
   providerAccounts.stop();
   privateSignIn.stop();
   liveRemote.stop();
@@ -312,7 +331,9 @@ function switchMode(mode, options = {}) {
     overlayWindow = null;
   }
 
-  if (!config.paired || !config.tvToken) {
+  if (readyMessage) {
+    mainWindow.loadFile(path.join(__dirname,"ready-to-provision.html"),{query:{state:readyMessage}}).catch(()=>{});
+  } else if (!config.paired || !config.tvToken) {
     mainWindow.loadURL(`${API_BASE}/tv/pair`).catch(() => {});
     return;
   }
@@ -479,6 +500,7 @@ setInterval(fetchSponsorData, 5 * 60 * 1000);
 // ─── HTTP Polling (Dashboard Control) ────────────────────────────────────────
 let pollInterval = null;
 function startPolling() {
+  if(readyMessage)return;
   if (updateCandidate && !updateCandidate.active) return;
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = null;
@@ -763,9 +785,22 @@ ipcMain.on("switch-mode", (event, mode, options) => {
 });
 
 // ─── App Lifecycle ──────────────────────────────────────────────────────────
-app.whenReady().then(() => {
-  presentationKey = safeStorage ? loadPresentationKey({ safeStorage, profile: app.getPath("userData"), installDir: INSTALL_DIR }) : null;
+app.whenReady().then(async () => {
+  try {await resetReuse.initialise();} catch {readyMessage="Reset incomplete — contact a platform administrator";config={paired:false};}
+  globalShortcut.register("Control+Alt+R",()=>void resetReuse.reset());
+  globalShortcut.register("Control+Alt+Shift+R",()=>void resetReuse.assisted());
+  presentationKey = !readyMessage && safeStorage ? loadPresentationKey({ safeStorage, profile: app.getPath("userData"), installDir: INSTALL_DIR }) : null;
   createMainWindow();
+  if(process.platform==='win32' && !updateCandidate) {
+    try {
+      const identity=currentProcessIdentity(app), health=path.join(INSTALL_DIR,'.health');
+      fs.mkdirSync(health,{recursive:true});const file=path.join(health,String(process.pid)+'.json');
+      const tick=()=>fs.writeFileSync(file,JSON.stringify({at:Date.now()}));tick();healthTimer=setInterval(tick,5000);
+      const child=spawn('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'runtime-watchdog.ps1'),'-ParentPid',String(process.pid),'-StartedAt',String(identity.parentStartedAt),'-Executable',app.getPath('exe'),'-HealthFile',file],{windowsHide:true,detached:true,stdio:'ignore'});
+      child.once('error',()=>{});child.unref();
+    } catch { /* Commissioning must verify supervisor availability on hardware. */ }
+  }
+  if(process.argv.includes('--kuevy-reset')) void resetReuse.reset();
   if (config.paired && config.tvToken && presentationKey && !updateCandidate) presentation.reconcile(config.experience);
   powerMonitor.on("resume", () => recovery.schedule());
   powerMonitor.on("unlock-screen", () => recovery.schedule());
@@ -786,6 +821,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  globalShortcut.unregisterAll();
+  if(healthTimer) clearInterval(healthTimer);
   providerAccounts.stop();
   privateSignIn.stop();
   liveRemote.stop();
@@ -811,5 +848,5 @@ app.on("activate", () => {
 // ─── Auto-restart on crash ──────────────────────────────────────────────────
 process.on("uncaughtException", () => {
   console.error("[TV Box] Unexpected application error");
-  // Don't crash — just log and continue
+  app.exit(1); // OS supervisor performs bounded recovery; do not continue corrupted state.
 });

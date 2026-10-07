@@ -44,12 +44,13 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
   const powerMonitor = new EventEmitter();
   const context = vm.createContext({
     require(name) {
-      if (name === 'electron') return { app, components, BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ bounds: { width: 1920, height: 1080 }, workAreaSize: { width: 1920, height: 1032 } }) } };
+      if (name === 'electron') return { app, components, globalShortcut:{register(){},unregisterAll(){}},BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ bounds: { width: 1920, height: 1080 }, workAreaSize: { width: 1920, height: 1032 } }) } };
       if (name === 'fs') return {
         existsSync: p => files.has(p), readFileSync: p => files.get(p),
         mkdirSync() {}, writeFileSync: (p, data) => files.set(p, data),
       };
       if (name === './recovery') return { tokenFromBoardUrl, createRecovery: opts => createRecovery({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
+      if (name === './reset-reuse') return {createResetReuse:()=>({initialise:async()=>false,reset:async()=>{},assisted:async()=>{}})};
       if (name === './sponsor') return require('../src/sponsor');
       if (name === './navigation') return require('../src/navigation');
       if (name === './provider-user-agent') return require('../src/provider-user-agent');
@@ -73,7 +74,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,
-    process: Object.assign(new EventEmitter(), { execPath: '/fixture/app.exe', env: {}, platform: 'win32' }),
+    process: Object.assign(new EventEmitter(), { execPath: '/fixture/app.exe', env: {}, platform: 'win32',argv:[] }),
     console: { log: (...args) => logs.push(args.join(' ')), error: (...args) => logs.push(args.join(' ')) },
     setTimeout: (fn, delay) => { const id = nextTimer++; timers.set(id, { fn, delay }); return id; },
     clearTimeout: id => timers.delete(id),

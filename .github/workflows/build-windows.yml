@@ -95,6 +95,9 @@ jobs:
           node scripts/build-installer.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         
+      - name: Verify reset and reuse
+        run: npm run verify:reset-reuse
+
       - name: Verify Windows runtime and recovery
         run: |
           node scripts/verify-protected-playback.cjs
