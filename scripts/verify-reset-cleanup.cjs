@@ -1,9 +1,14 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {spawnSync}=require('node:child_process');
 if(process.platform!=='win32')throw Error('Windows cleanup verification requires Windows');
-const base=fs.mkdtempSync(path.join(os.tmpdir(),'kuevy-cleanup-fixture-'));
+// A runner TEMP alias can cross a junction that the real cleanup correctly refuses.
+const base=fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()),'kuevy-cleanup-fixture-'));
 const id='11111111-1111-4111-8111-111111111111';
-const source=fs.readFileSync('src/reset-cleanup.ps1','utf8').replace(/^param[^\n]*\r?\n/,'');
+const original=fs.readFileSync('src/reset-cleanup.ps1','utf8').replace(/^param[^\n]*\r?\n/,'');
+const silentCatch='catch { exit 1 }';
+assert.equal(original.split(silentCatch).length,2,'Expected one cleanup refusal handler');
+// Diagnostics are confined to this synthetic harness; native refusal stays unchanged.
+const source=original.replace(silentCatch,'catch { [Console]::Error.WriteLine("Fixture " + $env:FIXTURE_CASE + ": " + $_.Exception.Message); exit 1 }');
 for(const kind of ['success','partial','resume','conflict','slot-conflict','redirect','process','outside','startup-failure']) {
  const home=path.join(base,kind),root=path.join(home,'myREWRD-TV-Box'),profile=path.join(home,'Roaming','myREWRD TV Box'),journal=path.join(home,'.kuevy-reset','state.json'),exe=path.join(root,'runtime-a','myREWRD TV Box.exe');
  for(const folder of [root,profile,path.dirname(journal),path.dirname(exe)])fs.mkdirSync(folder,{recursive:true});
