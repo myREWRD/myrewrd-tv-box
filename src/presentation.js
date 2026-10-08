@@ -3,7 +3,7 @@ const { pathToFileURL } = require('node:url');
 
 // The receiver has a separate renderer. Main-process command polling never
 // waits for it, so remote exit can destroy even an unresponsive receiver.
-function createPresentation({ BrowserWindow, ipcMain, apiBase, getToken, getKey, onExit }) {
+function createPresentation({ BrowserWindow, ipcMain, apiBase, getToken, getKey, onExit, fetcher=(...args)=>fetch(...args) }) {
   const page = path.join(__dirname, 'pages', 'presentation.html');
   let window = null, state = null, status = 'ready', pulse = 0, failedAt = 0, endedSession = null;
   const trusted = event => window && event.sender === window.webContents
@@ -38,7 +38,7 @@ function createPresentation({ BrowserWindow, ipcMain, apiBase, getToken, getKey,
     if (!trusted(event) || !state) throw new Error('Receiver unavailable');
     if (answer !== undefined && answer?.type !== 'restart' && (answer?.type !== 'answer' || typeof answer.sdp !== 'string' || answer.sdp.length > 60000)) throw new Error('Invalid answer');
     const session = state.session_id;
-    const response = await fetch(`${apiBase}/api/tv-presentation`, { method: 'POST',
+    const response = await fetcher(`${apiBase}/api/tv-presentation`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10000),
       body: JSON.stringify({ token: getToken(), device_key: getKey(), action: 'signal', session_id: session,
         ...(answer?.type === 'restart' ? { restart: true } : answer ? { answer } : {}) }) });

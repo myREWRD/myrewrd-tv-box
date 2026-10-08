@@ -27,18 +27,23 @@ function New-NetFirewallRule { param($Name,$DisplayName,$Direction,$Action,$Prog
 function Invoke-WebRequest { param([switch]$UseBasicParsing,$Uri,$OutFile) [IO.File]::Copy(${quote(zip)},$OutFile) }
 function shutdown.exe { [IO.File]::WriteAllText((Join-Path $env:USERPROFILE 'restart.requested'),'mock');$global:LASTEXITCODE=0 }
 `;
-let script=fs.readFileSync(path.join(__dirname,'install-runtime.template.ps1'),'utf8').replace('#Requires -RunAsAdministrator','').replace(/^if \(\[Security\.Principal\.WindowsIdentity\].*$/m,'# Identity check replaced ONLY in isolated test copy; no production installer executed.').replace('param([switch]$NoRestart)',()=>`param([switch]$NoRestart)\n${mocks}\nfunction ExpandVerifiedRuntime {\n${expand}\n}`).replaceAll('@VERSION@','2.0.0').replaceAll('@HASH@',hash);
+let script=fs.readFileSync(path.join(__dirname,'install-runtime.template.ps1'),'utf8').replace('#Requires -RunAsAdministrator','').replace(/^if \(\[Security\.Principal\.WindowsIdentity\].*$/m,'# Identity check replaced ONLY in isolated test copy; no production installer executed.').replace('param([switch]$NoRestart,[string]$RuntimeArchive)',()=>`param([switch]$NoRestart,[string]$RuntimeArchive)\n${mocks}\nfunction ExpandVerifiedRuntime {\n${expand}\n}`).replaceAll('@VERSION@','2.0.0').replaceAll('@HASH@',hash);
 const testScript=path.join(root,'mock-installer.ps1');fs.writeFileSync(testScript,script);
-function run(home,noRestart=false,expectFailure=false){
+function run(home,noRestart=false,expectFailure=false,archive=null){
  fs.mkdirSync(home,{recursive:true});const appdata=path.join(home,'AppData');fs.mkdirSync(appdata,{recursive:true});
  let failed=false;
- try{execFileSync(ps,['-NoProfile','-ExecutionPolicy','Bypass','-File',testScript,...(noRestart?['-NoRestart']:[])],{env:{...process.env,USERPROFILE:home,APPDATA:appdata},windowsHide:true,stdio:'pipe'});}catch(e){failed=true;if(!expectFailure)throw e;}
+ try{execFileSync(ps,['-NoProfile','-ExecutionPolicy','Bypass','-File',testScript,...(noRestart?['-NoRestart']:[]),...(archive?['-RuntimeArchive',archive]:[])],{env:{...process.env,USERPROFILE:home,APPDATA:appdata},windowsHide:true,stdio:'pipe'});}catch(e){failed=true;if(!expectFailure)throw e;}
  assert.equal(failed,expectFailure,'installer process failure expectation');
  return path.join(home,'myREWRD-TV-Box');
 }
 function startup(home){return path.join(home,'AppData','Microsoft','Windows','Start Menu','Programs','Startup','myREWRD-TV-Box.bat');}
 function config(home){const p=path.join(home,'AppData','myREWRD TV Box','config.json');fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,'{"paired":"preserved"}');return p;}
 const fresh=path.join(root,'fresh'),install=run(fresh,true);
+const localCandidate=run(path.join(root,'local-candidate'),true,false,zip);
+assert.ok(fs.existsSync(path.join(localCandidate,'installed-runtime.json')));
+const badArchive=path.join(root,'wrong-hash.zip');fs.writeFileSync(badArchive,Buffer.concat([fs.readFileSync(zip),Buffer.from('tamper')]));
+const rejected=run(path.join(root,'rejected-candidate'),true,true,badArchive);
+assert.equal(fs.existsSync(path.join(rejected,'installed-runtime.json')),false);
 assert.ok(fs.existsSync(path.join(install,'installed-runtime.json')));assert.equal(fs.existsSync(path.join(install,'provisioning-complete.json')),false);assert.equal(fs.existsSync(path.join(fresh,'restart.requested')),false);
 run(fresh,true);assert.ok(fs.readFileSync(startup(fresh),'utf8').includes('runtime-a'));
 const migrated=path.join(root,'migrated');const cfg=config(migrated);const installed=run(migrated);

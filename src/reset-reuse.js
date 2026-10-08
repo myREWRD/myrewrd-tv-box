@@ -5,7 +5,7 @@ const {createHash} = require('node:crypto');
 const {assertPlainTree} = require('./installed-runtime');
 const LEGACY = 'This legacy TV uses a shared or unverified credential and cannot be automatically reset for reuse. Complete decommissioning from the KUEVY TV Devices page.';
 function read(file) { if (!fs.existsSync(file)) return null; return JSON.parse(fs.readFileSync(file,'utf8')); }
-function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,isUpdating,showReady,restoreActive=()=>{},runPreflight=null,launch=spawn}) {
+function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,isUpdating,showReady,restoreActive=()=>{},runPreflight=null,launch=spawn,fetcher=(...args)=>fetch(...args)}) {
  const home=app.getPath('home'), profile=app.getPath('userData'), root=path.join(home,'myREWRD-TV-Box');
  const directory=path.join(home,'.kuevy-reset'), journalPath=path.join(directory,'state.json');
  let busy=false;
@@ -16,8 +16,9 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
   while(cursor!==path.dirname(cursor)) {if(fs.existsSync(cursor)&&fs.lstatSync(cursor).isSymbolicLink()) throw Error('Redirected profile denied');cursor=path.dirname(cursor);}
   if(fs.existsSync(full)&&fs.lstatSync(full).isDirectory()) assertPlainTree(full);
  }
- function journal() { plain(directory); return read(journalPath); }
- function write(value) { plain(directory);fs.mkdirSync(directory,{recursive:true});fs.writeFileSync(journalPath+'.tmp',JSON.stringify(value));fs.renameSync(journalPath+'.tmp',journalPath); }
+ function journal() { plain(directory); const value=read(journalPath);if(value && (value.api_origin || 'https://app.myrewrd.com')!==apiBase)throw Error('Reset environment mismatch');return value; }
+ function isReadyOffline() {try {plain(directory);const value=read(journalPath);return value?.manifest_version===1 && value.phase==='ready' && !getConfig().tvToken;}catch{return false;}}
+ function write(value) { value.api_origin=apiBase;plain(directory);fs.mkdirSync(directory,{recursive:true});fs.writeFileSync(journalPath+'.tmp',JSON.stringify(value));fs.renameSync(journalPath+'.tmp',journalPath); }
  function secret() {
   if (!safeStorage.isEncryptionAvailable()) throw Error('Windows credential protection unavailable. Reset stopped.');
   const file=path.join(profile,'reset-key.enc'), config=getConfig();
@@ -35,7 +36,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
   const recovery=operation?.recovery ? safeStorage.decryptString(Buffer.from(operation.recovery,'base64')) : undefined;
   const key=operation ? undefined : secret();
   if(!operation && (!config.deviceId || !config.tvToken || !key)) throw Error(LEGACY);
-  const response=await fetch(`${apiBase}/api/tv-reset`,{method:'POST',headers:{'Content-Type':'application/json',...(!operation?{Authorization:`Bearer ${config.tvToken}`}:{})},
+  const response=await fetcher(`${apiBase}/api/tv-reset`,{method:'POST',headers:{'Content-Type':'application/json',...(!operation?{Authorization:`Bearer ${config.tvToken}`}:{})},
    body:JSON.stringify({action,device_id:config.deviceId,key,id:operation?.id,recovery}),signal:AbortSignal.timeout(15000)});
   const value=await response.json();if(!response.ok) throw Error(value.error || 'Reset could not be verified.');return value;
  }
@@ -46,7 +47,8 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
   const config=getConfig();let matched=false;
   for(const folder of [root,profile,path.join(root,'runtime-a'),path.join(root,'runtime-b'),path.join(app.getPath('appData'),'myREWRD TV Box'),path.join(app.getPath('appData'),'myrewrd-tv-box')]) {
    const value=read(path.join(folder,'config.json'));
-   if(!value)continue;
+   if(!value)continue;
+   if((value.apiOrigin || 'https://app.myrewrd.com')!==apiBase)throw Error('Local installation environment mismatch');
    if(operation) {
     const tokenHash=createHash('sha256').update(value.tvToken || '').digest('hex');
     if(tokenHash!==operation.token_hash || (value.deviceId && value.deviceId!==operation.device_id) || value.venueId!==operation.venue_id)throw Error('Conflicting local pairing. Attended review required.');
@@ -119,6 +121,6 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
   } catch(error){await dialog.showMessageBox({type:'error',message:'Cleanup did not complete',detail:error.message});}
   finally{busy=false;}
  }
- return {initialise,reset,assisted,request};
+ return {initialise,reset,assisted,request,isReadyOffline};
 }
 module.exports={createResetReuse,LEGACY};

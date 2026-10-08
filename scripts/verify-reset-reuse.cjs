@@ -7,7 +7,7 @@ const safeStorage={isEncryptionAvailable:()=>true,encryptString:s=>Buffer.from('
 function fixture(name,options={}) {
  const home=path.join(base,name),appData=path.join(home,'Roaming'),profile=path.join(appData,'myREWRD TV Box'),root=path.join(home,'myREWRD-TV-Box');
  fs.mkdirSync(profile,{recursive:true});fs.mkdirSync(root,{recursive:true});
- let config={deviceId:uuid,venueId:venue,tvToken:'fixture-old-token',resetKey:'a'.repeat(64)},server='prepared',launched=0,quit=0,restored=0;
+ let config={deviceId:uuid,venueId:venue,tvToken:'fixture-old-token',resetKey:'a'.repeat(64),apiOrigin:'https://fixture.invalid'},server='prepared',launched=0,quit=0,restored=0;
  const ready=[],errors=[],calls=[];
  fs.writeFileSync(path.join(root,'config.json'),JSON.stringify(config));
  const journal=path.join(home,'.kuevy-reset','state.json');
@@ -33,7 +33,7 @@ function fixture(name,options={}) {
   if(kind==='conflict'){fs.mkdirSync(path.join(f.root,'runtime-b'),{recursive:true});fs.writeFileSync(path.join(f.root,'runtime-b','config.json'),JSON.stringify({deviceId:venue}));}
   if(kind==='redirect'){fs.mkdirSync(path.join(base,'unrelated'),{recursive:true});fs.symlinkSync(path.join(base,'unrelated'),path.join(f.root,'redirect'),'junction');}
   if(['ready','fresh'].includes(kind)){
-   fs.mkdirSync(path.dirname(f.journal),{recursive:true});fs.writeFileSync(f.journal,JSON.stringify({manifest_version:1,phase:'ready',device_id:uuid}));
+   fs.mkdirSync(path.dirname(f.journal),{recursive:true});fs.writeFileSync(f.journal,JSON.stringify({manifest_version:1,phase:'ready',device_id:uuid,api_origin:'https://fixture.invalid'}));
    f.setConfig(kind==='fresh'?{deviceId:venue,tvToken:'fixture-new-token',venueId:venue,resetKey:'c'.repeat(64)}:{});
    if(kind==='fresh'){fs.unlinkSync(path.join(f.root,'config.json'));await f.controller.initialise();assert.equal(fs.existsSync(f.journal),false);}
    else{f.options.offline=true;await f.controller.initialise();assert.equal(f.ready.at(-1),'Ready to Provision');}

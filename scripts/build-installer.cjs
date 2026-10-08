@@ -8,7 +8,7 @@ const hash = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('he
 const template = fs.readFileSync(path.join(__dirname, 'install-runtime.template.ps1'), 'utf8');
 const expand = fs.readFileSync(path.join(root, 'src', 'expand-runtime.ps1'), 'utf8');
 // Function definition must precede the installer body, after its top-level param.
-const installer = template.replace('param([switch]$NoRestart)', () => `param([switch]$NoRestart)\nfunction ExpandVerifiedRuntime {\n${expand}\n}`)
+const installer = template.replace('param([switch]$NoRestart,[string]$RuntimeArchive)', () => `param([switch]$NoRestart,[string]$RuntimeArchive)\nfunction ExpandVerifiedRuntime {\n${expand}\n}`)
   .replaceAll('@VERSION@', version).replaceAll('@HASH@', hash);
 fs.writeFileSync(path.join(root, 'dist', `myREWRD.TV.Box.${version}.setup.ps1`), installer);
 console.log(`Built administrator migration for ${version}; ZIP SHA256 ${hash}`);

@@ -1,7 +1,8 @@
 // myREWRD TV Box — Main Electron Process
 // Manages: pairing, mode switching, HTTP polling control, DRM streaming, sponsor overlay, auto-update
 
-const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage, components, dialog, globalShortcut } = require("electron");
+const { app, BrowserWindow, BrowserView, ipcMain, screen, powerMonitor, safeStorage, components, dialog, globalShortcut, session } = require("electron");
+const acceptance = require('./acceptance-context');
 const path = require("path");
 const {createResetReuse} = require("./reset-reuse");
 const {spawn} = require("node:child_process");
@@ -66,7 +67,13 @@ function guardNavigation(contents) {
 
 // ─── Config & State ─────────────────────────────────────────────────────────
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
-const API_BASE = "https://app.myrewrd.com";
+let acceptanceMetadata = null, acceptanceContextError = false;
+try { acceptanceMetadata = acceptance.enrollmentMetadata(process.argv, app.getPath('home'), app.getVersion()); }
+catch { acceptanceContextError = true; acceptanceMetadata = {origin:'https://acceptance-blocked.invalid'}; }
+const API_BASE = acceptanceMetadata?.origin || "https://app.myrewrd.com";
+let acceptanceTransport = null;
+const fetch = (...args) => acceptanceTransport ? acceptanceTransport.fetch(...args)
+  : acceptanceMetadata || acceptanceContextError ? Promise.reject(Error('Office acceptance is not verified')) : globalThis.fetch(...args);
 const APP_VERSION = app.getVersion(); // reads from package.json "version"
 const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.join(app.getPath("home"), "myREWRD-TV-Box");
 
@@ -80,8 +87,11 @@ let streamRetry = null;
 let streamTarget = null;
 let overlayWindow = null; // Transparent overlay for sponsor bar
 let config = loadConfig();
+if (!acceptanceContextError && config.paired && (acceptanceMetadata ? config.apiOrigin !== API_BASE : config.apiOrigin && config.apiOrigin !== API_BASE)) {
+  acceptanceContextError = true;
+}
 const resetIdentity = {...config};
-const resetReuse = createResetReuse({app,dialog,safeStorage,getConfig:()=>resetIdentity,saveConfig:value=>{Object.assign(resetIdentity,value);saveConfig(value);},apiBase:API_BASE,isUpdating:()=>isUpdating || wifiSetup.active || providerAccounts.active || privateSignIn.active,restoreActive:()=>{readyMessage=null;config={...resetIdentity};restoreBoard();},showReady:message=>{
+function showMaintenance(message) {
   readyMessage=message;config={paired:false};
   if(mainWindow){
     providerAccounts.stop();privateSignIn.stop();liveRemote.stop();providerRemote.stop();remoteStatus.stop();enrollment.stop();presentation.stop();
@@ -91,7 +101,8 @@ const resetReuse = createResetReuse({app,dialog,safeStorage,getConfig:()=>resetI
     if(overlayWindow&&!overlayWindow.isDestroyed()){overlayWindow.close();overlayWindow=null;}
   }
   if(mainWindow) mainWindow.loadFile(path.join(__dirname,"ready-to-provision.html"),{query:{state:message}}).catch(()=>{});
-}});
+}
+const resetReuse = createResetReuse({app,dialog,safeStorage,fetcher:fetch,getConfig:()=>resetIdentity,saveConfig:value=>{Object.assign(resetIdentity,value);saveConfig(value);},apiBase:API_BASE,isUpdating:()=>isUpdating || wifiSetup.active || providerAccounts.active || privateSignIn.active,restoreActive:()=>{readyMessage=null;config={...resetIdentity};restoreBoard();},showReady:showMaintenance});
 const gameDayProvider = createGameDayProvider({getConfig:()=>config,save:saveConfig});
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
 let boardStatus = "connecting";
@@ -104,12 +115,12 @@ let restartTimer = null;
 let pollController = null;
 const providerWindows = new Set();
 let presentationKey = null;
-const enrollment = createEnrollment({ BrowserWindow, apiBase: API_BASE, getToken: () => config.tvToken,
+const enrollment = createEnrollment({ BrowserWindow, apiBase: API_BASE, fetcher:fetch, getToken: () => config.tvToken,
   ensureKey: () => {
     if (!presentationKey && safeStorage) presentationKey = ensurePresentationKey({ safeStorage, profile: app.getPath("userData"), installDir: INSTALL_DIR });
     return presentationKey;
   } });
-const presentation = createPresentation({ BrowserWindow, ipcMain, apiBase: API_BASE,
+const presentation = createPresentation({ BrowserWindow, ipcMain, apiBase: API_BASE, fetcher:fetch,
   getToken: () => config.tvToken, getKey: () => presentationKey,
   onExit: () => { if (mainWindow && !mainWindow.isDestroyed()) switchMode("regular"); } });
 const recovery = createRecovery({ restore: restoreBoard });
@@ -117,10 +128,10 @@ const updateCandidate = createCandidate({
   argv: process.argv || [], installRoot: INSTALL_DIR, profile: app.getPath("userData"), version: APP_VERSION, app,
   activate() { mainWindow.show(); mainWindow.focus(); startPolling(); fetchSponsorData(); },
 });
-const remoteStatus = createRemoteStatus({ apiBase: API_BASE, getToken: () => config.tvToken,
+const remoteStatus = createRemoteStatus({ apiBase: API_BASE, send:fetch, getToken: () => config.tvToken,
   getKey: () => presentationKey,
   canReport: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)) });
-const providerRemote = createProviderRemote({ apiBase: API_BASE, getToken: () => config.tvToken, getKey: () => presentationKey,
+const providerRemote = createProviderRemote({ apiBase: API_BASE, fetcher:fetch, getToken: () => config.tvToken, getKey: () => presentationKey,
   getDisplayStatus: () => providerDisplayStatus({ mode: currentMode, provider: gameDayProvider.selected(), contents: streamView?.webContents,
     privateActive: providerAccounts.active || privateSignIn.active || Boolean(providerWindows.size), unavailable: isUpdating || presentation.active }),
   canPoll: () => Boolean(config.paired && !handoffRequested && (!updateCandidate || updateCandidate.active)),
@@ -144,7 +155,7 @@ function requestRemoteRestart() {
   return 'applied';
 }
 
-const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
+const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE, fetcher:fetch,
   diagnoseSearch:reason=>{if(['field','type','autocomplete','search','sensitive','selection','execution','context','loading','connected','binding'].includes(reason))fs.writeFileSync(path.join(app.getPath('userData'),'search-edit-status.json'),JSON.stringify({reason,at:new Date().toISOString()}));},
   diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'live-remote-status.json'),JSON.stringify(record)),
   getToken:()=>config.tvToken, getKey:()=>presentationKey, getView:()=>streamView,
@@ -154,16 +165,16 @@ const liveRemote = createLiveRemote({ BrowserWindow, ipcMain, apiBase:API_BASE,
     openProvider:(url,provider)=>openGameDayProvider(provider),focus:()=>mainWindow?.focus()})
 });
 
-const providerAccounts=createProviderAccounts({BrowserWindow,apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+const providerAccounts=createProviderAccounts({BrowserWindow,apiBase:API_BASE,fetcher:fetch,getToken:()=>config.tvToken,getKey:()=>presentationKey,
   diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'provider-account-status.json'),JSON.stringify(record)),
   canPoll:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size&&!privateSignIn.active),
   onPrivateStart:()=>{privateSignIn.stop();liveRemote.stop();providerResume.cancel();}});
 
-const privateSignIn=createPrivateSignIn({BrowserWindow,ipcMain,apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+const privateSignIn=createPrivateSignIn({BrowserWindow,ipcMain,apiBase:API_BASE,fetcher:fetch,getToken:()=>config.tvToken,getKey:()=>presentationKey,
   canStart:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size&&!providerAccounts.active),
   onStart:()=>{providerAccounts.stop();liveRemote.stop();providerResume.cancel();}});
 
-const wifiSetup=createWifiSetup({apiBase:API_BASE,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+const wifiSetup=createWifiSetup({apiBase:API_BASE,fetcher:fetch,getToken:()=>config.tvToken,getKey:()=>presentationKey,
   canPoll:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating),
   readReceipt:()=>JSON.parse(fs.readFileSync(path.join(app.getPath('userData'),'wifi-setup-receipt.json'),'utf8')),
   writeReceipt:receipt=>fs.writeFileSync(path.join(app.getPath('userData'),'wifi-setup-receipt.json'),JSON.stringify(receipt))});
@@ -222,6 +233,7 @@ function loadConfig() {
 }
 
 function saveConfig(data) {
+  if (acceptanceMetadata) data = {...data, apiOrigin:API_BASE};
   if ((Object.hasOwn(data,'tvToken') && data.tvToken!==config.tvToken) || data.paired===false) {
     gameDayProvider.reset();
     data={...data,gameDayProvider:null,gameDayResumeUrls:null};
@@ -786,7 +798,24 @@ ipcMain.on("switch-mode", (event, mode, options) => {
 
 // ─── App Lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  try {await resetReuse.initialise();} catch {readyMessage="Reset incomplete — contact a platform administrator";config={paired:false};}
+  if (acceptanceMetadata) {
+    try {
+      if(acceptanceContextError)throw Error('Office context needs refresh');
+      const enrolling = process.argv.includes('--kuevy-enroll-acceptance');
+      const context = enrolling ? await acceptance.enroll(app.getPath('home'), safeStorage, acceptanceMetadata, process.env.VERCEL_OIDC_TOKEN, globalThis.fetch)
+        : acceptance.readContext(app.getPath('home'), safeStorage, APP_VERSION);
+      if(!context || context.origin!==API_BASE)throw Error('Protected office context missing or mismatched');
+      delete process.env.VERCEL_OIDC_TOKEN;
+      const blocked = () => showMaintenance('Office acceptance access needs refresh');
+      acceptanceTransport = acceptance.createTransport(context, globalThis.fetch, {blocked});
+      await acceptanceTransport.verify();
+      app.on('session-created', value => value.webRequest.onBeforeSendHeaders((details, callback) => callback(acceptanceTransport.electronHeaders(details))));
+      session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => callback(acceptanceTransport.electronHeaders(details)));
+      setInterval(()=>void acceptanceTransport.verify().catch(()=>{}),30000);
+    } catch {delete process.env.VERCEL_OIDC_TOKEN;acceptanceContextError=true;readyMessage='Office acceptance connection unavailable — refresh access';config={paired:false};}
+  }
+  if(acceptanceContextError){readyMessage=resetReuse.isReadyOffline?.()?'Ready to Provision':'Office acceptance connection unavailable — refresh access';config={paired:false};}
+  else try {await resetReuse.initialise();} catch {readyMessage="Reset incomplete — contact a platform administrator";config={paired:false};}
   globalShortcut.register("Control+Alt+R",()=>void resetReuse.reset());
   globalShortcut.register("Control+Alt+Shift+R",()=>void resetReuse.assisted());
   presentationKey = !readyMessage && safeStorage ? loadPresentationKey({ safeStorage, profile: app.getPath("userData"), installDir: INSTALL_DIR }) : null;

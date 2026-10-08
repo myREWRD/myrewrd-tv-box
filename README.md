@@ -1,5 +1,9 @@
 # myREWRD TV Box
 
+## October 7 — isolated office acceptance source
+
+Candidate2.3.31 adds an explicit protected Preview context for the office box; production has no environment-variable API override. The context binds origin/source and remains outside reset-erased state. Missing/expired access blocks API traffic without production fallback; local Ready remains offline. Native redirects refuse and Electron access headers remain origin-scoped. Reset configuration/journals bind environment. The installer accepts a local archive only with its fixed reviewed SHA256. See dashboard `docs/operations/TV_OFFICE_ACCEPTANCE.md` for supported synthetic-only authentication, operator packaging, page-download and physical gates. Original local artifact hashes predate this source change; rebuild/sign/review before immutable candidate publication. This is not a production release.
+
 ## September 26 — KUEVY presentation screen (2.3.30 candidate)
 
 Presentation mode now displays the owner-supplied KUEVY horizontal PNG logo and the human-facing app.kuevy.com address. The logo is bundled locally for offline startup; only same-origin images are added to the receiver CSP. Device names remain the actual configured labels (including the myREWRD venue), with KUEVY TV used only as the empty-name fallback. Pairing, backend origins, storage, provider sessions and screen-sharing behavior are unchanged.
@@ -309,3 +313,9 @@ This is a candidate, not an approved provisioning release. Physical saved-profil
 Source candidate: Ctrl+Alt+R opens trusted local Reset KUEVY TV for reuse; Ctrl+Alt+Shift+R selects a dashboard-authorized attended cleanup receipt. Server retirement precedes local cleanup. Ready is offline and new provisioning uses fresh identities. Shared/unverified credentials refuse automatic reset. Windows/network/general browser/Chrome Remote Desktop state is preserved; unknown legacy tasks/Run/shared profiles require attended review. Production migration, immutable VMP-signed runtime/setup hashes/pins and representative physical acceptance remain gates. No fleet rollout or G35 revocation is included. Canonical contract: ssdt-dashboard/docs/operations/TV_DECOMMISSION_REUSE.md.
 
 Verify with `npm run verify:reset-reuse`; Windows cleanup fixtures never target the real user profile. Cloud download is preferred only when full Windows recovery is actually needed, based on G35's Local reinstall failure and successful Cloud recovery. It is not routine venue transfer.
+
+## Isolated office acceptance — October 7, 2026
+
+The office candidate supports one explicitly enrolled immutable synthetic Preview origin. It verifies the source/database/version receipt, keeps project-scoped local OIDC in Windows safeStorage outside erased KUEVY state, strips access headers elsewhere, denies redirects/production imports and fails closed on missing/expired context. Public enrollment metadata rejects credentials/unknown fields. Production has no environment-variable API override. The signed installer can accept the exact pinned local candidate archive; normal production downloads are unchanged.
+
+`scripts/launch-office-acceptance.cjs` requires verified synthetic Preview environment inputs and local project authentication, refuses a running installed runtime and passes no database/provider/release credentials to Electron. Never invoke it with default Development variables. After acknowledged synthetic retirement and Ready, the attended `scripts/finish-office-acceptance.ps1` requires closed runtime/updater and explicit confirmation, verifies no pairing/key imports remain, archives attribution and removes only the test connection/dedicated KUEVY profiles before fresh production provisioning. Fixture coverage is not live OIDC, physical Windows or production acceptance. See canonical `ssdt-dashboard/docs/operations/TV_OFFICE_ACCEPTANCE.md`.
