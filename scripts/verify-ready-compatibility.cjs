@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
-const base=fs.mkdtempSync(path.join(os.tmpdir(),'kuevy-ready-compat-')),ps=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe');
+// Process mocks must use the long OS path, as actual Win32 process identity does.
+const base=fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(),'kuevy-ready-compat-'))),ps=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe');
 const q=s=>"'"+s.replaceAll("'","''")+"'",sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const template=fs.readFileSync('scripts/install-runtime.template.ps1','utf8');
 const canonical=template.slice(template.indexOf('Add-Type'),template.indexOf("$version ="));
