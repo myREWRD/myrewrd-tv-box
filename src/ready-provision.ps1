@@ -36,7 +36,7 @@ function Update-KuevyReadyRuntime {
   $bytes=[IO.File]::ReadAllBytes($bridge);$offset=[BitConverter]::ToUInt32($bytes,60)
   if($bytes[0] -ne 77 -or $bytes[1] -ne 90 -or $offset -gt $bytes.Length-4 -or [Text.Encoding]::ASCII.GetString($bytes,$offset,4) -ne "PE`0`0"){throw 'Unsupported older Ready recovery bridge'}
   $bridgeHash=File-Hash $bridge;$scriptHash=File-Hash $script
-  $pattern='^"'+[regex]::Escape((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'))+'" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+[regex]::Escape($script)+'" -ParentPid '+$owner.Id+' -StartedAt "([0-9]+)" -Executable "'+[regex]::Escape($active)+'" -HealthFile "'+[regex]::Escape($health)+'"$'
+  $pattern='^"'+[regex]::Escape((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'))+'" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+[regex]::Escape($script)+'" -ParentPid '+$owner.Id+' -StartedAt "([0-9]+(?:\.[0-9]+)?)" -Executable "'+[regex]::Escape($active)+'" -HealthFile "'+[regex]::Escape($health)+'"$'
   $watch=@(Get-CimInstance Win32_Process|Where-Object {$_.CommandLine -match $pattern -and [Math]::Abs([double]$Matches[1]-$stamp) -lt 1000})
   if($watch.Count -ne 1){throw 'A uniquely matched Ready supervisor is required; no processes closed'}
   $supervisor=Get-Process -Id $watch[0].ProcessId -ErrorAction Stop

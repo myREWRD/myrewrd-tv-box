@@ -4,13 +4,13 @@ const q=s=>"'"+s.replaceAll("'","''")+"'",sha=b=>crypto.createHash('sha256').upd
 const template=fs.readFileSync('scripts/install-runtime.template.ps1','utf8');
 const canonical=template.slice(template.indexOf('Add-Type'),template.indexOf("$version ="));
 const source=fs.readFileSync('src/ready-provision.ps1','utf8');
-for(const kind of ['normal-close','cancel','foreign-supervisor','duplicate-supervisor','no-window','owner-reused','journal-changed','missing-bridge','corrupt-bridge','close-refused','close-timeout']){
+for(const kind of ['normal-close','fractional-stamp','cancel','foreign-supervisor','duplicate-supervisor','no-window','owner-reused','journal-changed','missing-bridge','corrupt-bridge','close-refused','close-timeout']){
  const home=path.join(base,kind),root=path.join(home,'myREWRD-TV-Box'),active=path.join(root,'runtime-a/myREWRD TV Box.exe'),folder=path.join(root,'runtime-a/resources/app.asar.unpacked/src');fs.mkdirSync(folder,{recursive:true});
  const bridge=Buffer.alloc(128);bridge.write('MZ');bridge.writeUInt32LE(64,60);bridge.write('PE\0\0',64);if(kind==='corrupt-bridge')bridge[0]=0;
  fs.writeFileSync(active,'fixture');fs.writeFileSync(path.join(root,'runtime-a/resources/app.asar'),'accepted-asar');fs.writeFileSync(path.join(folder,'maintenance-launcher.exe'),bridge);fs.writeFileSync(path.join(folder,'runtime-watchdog.ps1'),'fixture');fs.writeFileSync(path.join(root,'runtime-a/runtime-release.json'),' {"layout":"installed-ab-v1","version":"2.3.31"}');
  const startup=path.join(home,'AppData/Microsoft/Windows/Start Menu/Programs/Startup/myREWRD-TV-Box.bat'),journal=path.join(home,'.kuevy-reset/state.json');fs.mkdirSync(path.dirname(startup),{recursive:true});fs.mkdirSync(path.dirname(journal),{recursive:true});fs.writeFileSync(startup,`@echo off\r\nstart "" "${active}"\r\n`);fs.writeFileSync(journal,'{"manifest_version":1,"phase":"ready","device_id":"11111111-1111-4111-8111-111111111111","api_origin":"https://fixture.invalid"}');
  const before={startup:fs.readFileSync(startup),journal:fs.readFileSync(journal)};
- const stamp=Date.now()-10000,command=`"${ps}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "${path.join(folder,'runtime-watchdog.ps1')}" -ParentPid ${kind==='foreign-supervisor'?8:7} -StartedAt "${stamp}" -Executable "${active}" -HealthFile "${path.join(root,'.health/7.json')}"`;
+ const stamp=Date.now()-10000,command=`"${ps}" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "${path.join(folder,'runtime-watchdog.ps1')}" -ParentPid ${kind==='foreign-supervisor'?8:7} -StartedAt "${kind==='fractional-stamp'?stamp+0.25:stamp}" -Executable "${active}" -HealthFile "${path.join(root,'.health/7.json')}"`;
  const proof=path.join(home,'proof.json');
  const mocks=`
 $global:ownerAlive=$true;$global:watchAlive=$true;$global:watchId=9;$global:confirmed=$false;$global:stops=0;$global:closes=0;$global:restores=0
@@ -36,7 +36,7 @@ function Start-Process {param($FilePath,$ArgumentList,$WindowStyle) if($FilePath
  // compatibility preflight (the active helper content pin is initially valid).
  if(kind==='missing-bridge')fs.writeFileSync(script,fs.readFileSync(script,'utf8').replace("function Start-Process {param($FilePath,$ArgumentList,$WindowStyle)",`function Start-Process {param($FilePath,$ArgumentList,$WindowStyle) if($FilePath -eq ${q(active)}){[IO.File]::Delete(${q(path.join(folder,'maintenance-launcher.exe'))})};`));
  execFileSync(ps,['-NoProfile','-File',script],{env:{...process.env,USERPROFILE:home,APPDATA:path.join(home,'AppData')},windowsHide:true,stdio:'pipe'});
- const result=JSON.parse(fs.readFileSync(proof,'utf8'));assert.equal(result.passed,kind==='normal-close',kind);assert.equal(result.stops,['normal-close','close-refused','close-timeout'].includes(kind)?1:0,kind);assert.equal(result.restores,['close-refused','close-timeout'].includes(kind)?1:0,kind);assert.deepEqual(fs.readFileSync(startup),before.startup);if(kind!=='journal-changed')assert.deepEqual(fs.readFileSync(journal),before.journal);
+ const result=JSON.parse(fs.readFileSync(proof,'utf8'));assert.equal(result.passed,['normal-close','fractional-stamp'].includes(kind),kind);assert.equal(result.stops,['normal-close','fractional-stamp','close-refused','close-timeout'].includes(kind)?1:0,kind);assert.equal(result.restores,['close-refused','close-timeout'].includes(kind)?1:0,kind);assert.deepEqual(fs.readFileSync(startup),before.startup);if(kind!=='journal-changed')assert.deepEqual(fs.readFileSync(journal),before.journal);
  console.log('PASS attended older Ready compatibility '+kind);
 }
 console.log('No real processes or native dialogs used; actual old-runtime physical acceptance remains required.');
