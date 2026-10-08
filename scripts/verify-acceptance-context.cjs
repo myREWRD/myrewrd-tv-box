@@ -44,6 +44,15 @@ async function run() {
   assert.equal(fs.readFileSync(path.join(home,'.kuevy-acceptance','enrolled.json'),'utf8').includes(oidc),false);
   assert.equal(readMetadata(home,'2.3.31').origin,metadata.origin);
   assert.equal(readContext(home,storage,'2.3.31').oidc,oidc);
+  const directory=path.join(home,'.kuevy-acceptance'),file=path.join(directory,'context.enc'),temporary=file+'.tmp';
+  const foreignFolder=path.join(home,'foreign');fs.mkdirSync(foreignFolder);fs.writeFileSync(path.join(foreignFolder,'sentinel'),'preserve');
+  fs.symlinkSync(foreignFolder,temporary,'junction');
+  await assert.rejects(enroll(home,storage,metadata,oidc,async()=>new Response(JSON.stringify(attestation))));
+  fs.writeFileSync(file,storage.encryptString(JSON.stringify(value)));
+  assert.throws(()=>readContext(home,storage,'2.3.31'));
+  assert.equal(fs.readFileSync(path.join(foreignFolder,'sentinel'),'utf8'),'preserve');
+  fs.unlinkSync(temporary);
+  assert.equal(readContext(home,storage,'2.3.31').oidc,oidc);
   fs.unlinkSync(path.join(home,'.kuevy-acceptance','context.enc'));
   assert.throws(()=>readContext(home,storage,'2.3.31'));assert.equal(readMetadata(home,'2.3.31').origin,metadata.origin);
   assert.throws(()=>readContext(home,{isEncryptionAvailable:()=>false},'2.3.31'));

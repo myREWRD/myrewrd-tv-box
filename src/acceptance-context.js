@@ -1,6 +1,7 @@
 // Office acceptance only. Production has no environment-variable API override.
 const fs = require('node:fs');
 const path = require('node:path');
+const protection = require('./persistent-protection');
 const PRODUCTION = 'https://app.myrewrd.com';
 const PROJECT = 'rwcpejpazuomogzvbwfy';
 const HEADER = 'x-vercel-trusted-oidc-idp-token';
@@ -38,12 +39,24 @@ function assertPlain(file) {
     if (fs.existsSync(cursor) && fs.lstatSync(cursor).isSymbolicLink()) throw Error('Redirected acceptance context denied');
   }
 }
+function atomicWrite(file,value) {
+  const temporary=file+'.tmp';
+  assertPlain(file);assertPlain(temporary);
+  fs.writeFileSync(temporary,value,{flag:'wx'});
+  assertPlain(file);assertPlain(temporary);
+  fs.renameSync(temporary,file);
+}
 function readContext(home, safeStorage, version) {
   const folder = path.join(home, '.kuevy-acceptance'), marker = path.join(folder, 'enrolled.json'), file = path.join(folder, 'context.enc');
   assertPlain(file); assertPlain(marker);
   if (!fs.existsSync(file) && !fs.existsSync(marker)) return null;
   if (!fs.existsSync(file) || !fs.existsSync(marker) || !safeStorage?.isEncryptionAvailable()) throw Error('Office acceptance access is incomplete');
-  try { return validateContext(JSON.parse(safeStorage.decryptString(fs.readFileSync(file))), version); }
+  try {
+    const encrypted=fs.readFileSync(file);
+    const context=validateContext(JSON.parse(protection.unprotect('office-context',encrypted,safeStorage)),version);
+    if(!protection.isProtected('office-context',encrypted))atomicWrite(file,protection.protect('office-context',JSON.stringify(context)));
+    return context;
+  }
   catch { throw Error('Office acceptance access needs refresh; production fallback is disabled'); }
 }
 function readMetadata(home, version) {
@@ -71,9 +84,8 @@ async function enroll(home, safeStorage, metadata, oidc, transport) {
   assertPlain(path.join(folder,'context.enc')); assertPlain(path.join(folder,'enrolled.json'));
   fs.mkdirSync(folder, {recursive:true});
   // Marker first: an interrupted enrollment must block production fallback.
-  fs.writeFileSync(path.join(folder,'enrolled.json'), JSON.stringify(metadata));
-  fs.writeFileSync(path.join(folder,'context.enc.tmp'), safeStorage.encryptString(JSON.stringify(value)));
-  fs.renameSync(path.join(folder,'context.enc.tmp'), path.join(folder,'context.enc'));
+  atomicWrite(path.join(folder,'enrolled.json'),JSON.stringify(metadata));
+  atomicWrite(path.join(folder,'context.enc'),protection.protect('office-context',JSON.stringify(value)));
   return value;
 }
 function createTransport(context, transport, { now = Date.now, blocked = () => {} } = {}) {
