@@ -49,4 +49,12 @@ function fixture(name,options={}) {
  // No remote renderer IPC/reset channel is exposed. Only native shortcut/dialog.
  const main=fs.readFileSync('src/main.js','utf8');
  assert.ok(main.includes('Control+Alt+R'));assert.ok(!/ipcMain\.(?:on|handle)\([^\n]*resetReuse/.test(main));
+ const html=fs.readFileSync('src/ready-to-provision.html','utf8');
+ const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
+ for(const status of ['Ready to Provision','Reset incomplete — use Ctrl+Alt+R to resume','Office acceptance connection unavailable — refresh access']) {
+  const elements={state:{textContent:''},'next-step':{textContent:'Complete local reset maintenance before provisioning this box.'}};
+  require('node:vm').runInNewContext(script,{document:{getElementById:id=>elements[id]},location:{search:'?state='+encodeURIComponent(status)},URLSearchParams});
+  assert.equal(elements.state.textContent,status);
+  assert.equal(elements['next-step'].textContent.includes('Create a new TV Device'),status==='Ready to Provision');
+ }
 })().catch(error=>{console.error(error);process.exitCode=1;});
