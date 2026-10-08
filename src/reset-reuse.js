@@ -2,7 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawn,execFileSync} = require('node:child_process');
 const {createHash} = require('node:crypto');
-const {assertPlainTree} = require('./installed-runtime');
+const {assertPlainTree} = require('./installed-runtime');
+const {launchResetHelper} = require('./reset-helper-launch');
 const LEGACY = 'This legacy TV uses a shared or unverified credential and cannot be automatically reset for reuse. Complete decommissioning from the KUEVY TV Devices page.';
 function read(file) { if (!fs.existsSync(file)) return null; return JSON.parse(fs.readFileSync(file,'utf8')); }
 function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,isUpdating,showReady,restoreActive=()=>{},runPreflight=null,launch=spawn,fetcher=(...args)=>fetch(...args)}) {
@@ -59,17 +60,24 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
   if(runPreflight)runPreflight();
   else execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'assert-reset-idle.ps1'),'-ParentPid',String(process.pid)],{windowsHide:true,timeout:15000,stdio:'pipe'});
  }
- function cleanup() {
-  showReady('Reset incomplete — finishing local KUEVY cleanup');
-  const operation=journal(); if(operation.phase!=='retired') throw Error('Server retirement is not verified.');
-  const helper=path.join(directory,'cleanup.ps1');
-  const bundled=path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'reset-cleanup.ps1');
-  fs.copyFileSync(bundled,helper);
+ async function cleanup() {
+
+  showReady('Reset incomplete — finishing local KUEVY cleanup');
+
+  const operation=journal(); if(operation.phase!=='retired') throw Error('Server retirement is not verified.');
+
+  const helper=path.join(directory,'cleanup.ps1');
+
+  const bundled=path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'reset-cleanup.ps1');
+
+  fs.copyFileSync(bundled,helper);
+
   fs.copyFileSync(path.join(path.dirname(bundled),'assert-reset-idle.ps1'),path.join(directory,'assert-reset-idle.ps1'));
   fs.copyFileSync(path.join(path.dirname(bundled),'reset-owned-copies.ps1'),path.join(directory,'reset-owned-copies.ps1'));
-  const child=launch('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',helper,'-Journal',journalPath,'-ParentPid',String(process.pid),'-Executable',app.getPath('exe')],{detached:true,windowsHide:true,stdio:'ignore'});
-  child.once('spawn',()=>{child.unref();app.quit();});
-  child.once('error',()=>showReady('Reset incomplete — restart the box and resume cleanup'));
+  plain(directory);
+  await launchResetHelper({helper:path.join(path.dirname(bundled),'maintenance-launcher.exe'),journal:journalPath,executable:app.getPath('exe'),launch,plain});
+  app.quit();
+
  }
  async function initialise() {
   const operation=journal();if(operation && operation.manifest_version!==1)throw Error('Reset journal version is unsupported');if(!operation){secret();return false;}
@@ -89,7 +97,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
    if(operation?.phase==='ready') {showReady('Ready to Provision');return;}
    if(operation) {
     const status=await request('status',operation);
-    if(status.phase==='retired'||status.phase==='complete') {operation.phase='retired';write(operation);cleanup();return;}
+    if(status.phase==='retired'||status.phase==='complete') {operation.phase='retired';write(operation);await cleanup();return;}
    } else {
     preflight();const prepared=await request('prepare');
     operation={manifest_version:1,id:prepared.id,device_id:prepared.device_id,venue_name:prepared.venue_name,device_name:prepared.device_name,phase:'prepared',recovery:safeStorage.encryptString(prepared.recovery).toString('base64')};write(operation);
@@ -97,7 +105,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
    const answer=await dialog.showMessageBox({type:'warning',buttons:['Cancel','Confirm Reset'],defaultId:0,cancelId:0,
     title:'Reset KUEVY TV for reuse',message:`Reset ${operation.device_name} from ${operation.venue_name}?`,detail:'This removes this TV from its venue, revokes this installation’s access and prepares it for another venue. Windows will not be erased.'});
    if(answer.response!==1) {const cancelled=await request('cancel',operation);if(cancelled.cancelled){fs.unlinkSync(journalPath);restoreActive();}else{operation.phase='retired';write(operation);showReady('Reset incomplete — use Ctrl+Alt+R to resume');}return;}
-   preflight();operation.phase='committing';write(operation);showReady('Reset incomplete — verifying server retirement');await request('commit',operation);operation.phase='retired';write(operation);cleanup();
+   preflight();operation.phase='committing';write(operation);showReady('Reset incomplete — verifying server retirement');await request('commit',operation);operation.phase='retired';write(operation);await cleanup();
   } catch(error) { await dialog.showMessageBox({type:'error',message:'Reset did not complete',detail:error.message}); }
   finally {busy=false;}
  }
@@ -117,7 +125,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
    preflight(operation);
    const answer=await dialog.showMessageBox({type:'warning',buttons:['Cancel','Confirm cleanup'],defaultId:0,cancelId:0,title:'Reset KUEVY TV for reuse',message:`Clean up retired ${operation.device_name} from ${operation.venue_name}?`,detail:'The server has retired this installation. Remove only its verified local KUEVY state. Windows will not be erased.'});
    if(answer.response!==1)return;
-   preflight(operation);write(operation);fs.unlinkSync(file);cleanup();
+   preflight(operation);write(operation);fs.unlinkSync(file);await cleanup();
   } catch(error){await dialog.showMessageBox({type:'error',message:'Cleanup did not complete',detail:error.message});}
   finally{busy=false;}
  }

@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Journal,[int]$ParentPid,[string]$Executable)
+param([Parameter(Mandatory)][string]$Journal,[int]$ParentPid,[string]$Executable,[Parameter(Mandatory)][string]$ReadyNonce)
 $ErrorActionPreference='Stop'
 function Assert-Plain([string]$Path) {
  $full=[IO.Path]::GetFullPath($Path)
@@ -22,10 +22,21 @@ try {
  $exe=Assert-Plain $Executable
  if($exe -notin @((Join-Path $root 'runtime-a\myREWRD TV Box.exe'),(Join-Path $root 'runtime-b\myREWRD TV Box.exe'))){throw 'Unknown runtime denied'}
  $exeVerified=$true
+ $stage='helper-ready'
+ if($ReadyNonce -notmatch '^[a-f0-9]{64}$' -or $ParentPid -le 0){throw 'Invalid helper handoff'}
+ $readyPath=Assert-Plain (Join-Path ([IO.Path]::GetDirectoryName($Journal)) 'cleanup-ready.json')
+ Assert-Plain ($readyPath+'.tmp')|Out-Null
+ [IO.File]::WriteAllText(($readyPath+'.tmp'),(@{phase='helper-ready';nonce=$ReadyNonce;parent_pid=$ParentPid}|ConvertTo-Json -Compress))
+ Move-Item -LiteralPath ($readyPath+'.tmp') -Destination $readyPath -Force
  $stage='parent-exit'
  # Wait for the exact parent to leave. Never kill an unrelated recycled process.
  for($n=0;$n -lt 30 -and (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue);$n++){Start-Sleep -Milliseconds 500}
  if(Get-Process -Id $ParentPid -ErrorAction SilentlyContinue){throw 'TV process did not exit'}
+ $stage='handoff'
+ $goPath=Assert-Plain (Join-Path ([IO.Path]::GetDirectoryName($Journal)) 'cleanup-go.json')
+ if(!(Test-Path -LiteralPath $goPath) -or (Get-Item -LiteralPath $goPath).Length -gt 1024){throw 'Helper handoff unapproved'}
+ $go=Get-Content -LiteralPath $goPath -Raw|ConvertFrom-Json
+ if($go.phase -ne 'handoff-approved' -or $go.nonce -ne $ReadyNonce -or $go.parent_pid -ne $ParentPid){throw 'Helper handoff unapproved'}
  $stage='local-paths'
  $profiles=@((Join-Path $env:APPDATA 'myREWRD TV Box'),(Join-Path $env:APPDATA 'myrewrd-tv-box'))
  $fallbacks=@((Join-Path $root 'runtime-a'),(Join-Path $root 'runtime-b'))

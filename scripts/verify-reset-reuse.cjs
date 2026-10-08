@@ -13,7 +13,7 @@ function fixture(name,options={}) {
  const journal=path.join(home,'.kuevy-reset','state.json');
  const app={getPath:key=>({home,appData,userData:profile,exe:path.join(root,'runtime-a','myREWRD TV Box.exe')})[key],quit:()=>quit++};
  const dialog={showMessageBox:async value=>{if(value.type==='error'){errors.push(value.detail);return {response:0};}return {response:options.cancel?0:1};}};
- const controller=createResetReuse({app,dialog,safeStorage,getConfig:()=>config,saveConfig:value=>{config={...value};fs.writeFileSync(path.join(profile,'config.json'),JSON.stringify(config));},apiBase:'https://fixture.invalid',isUpdating:()=>Boolean(options.updating),runPreflight:()=>{},restoreActive:()=>restored++,showReady:value=>ready.push(value),launch:()=>{launched++;const child=new EventEmitter();child.unref=()=>{};setImmediate(()=>child.emit('spawn'));return child;}});
+ const controller=createResetReuse({app,dialog,safeStorage,getConfig:()=>config,saveConfig:value=>{config={...value};fs.writeFileSync(path.join(profile,'config.json'),JSON.stringify(config));},apiBase:'https://fixture.invalid',isUpdating:()=>Boolean(options.updating),runPreflight:()=>{},restoreActive:()=>restored++,showReady:value=>ready.push(value),launch:(_helper,args)=>{launched++;const child=new EventEmitter();child.unref=()=>{};child.kill=()=>{};setImmediate(()=>{fs.writeFileSync(path.join(path.dirname(journal),'cleanup-ready.json'),JSON.stringify({phase:'helper-ready',parent_pid:process.pid,nonce:args[4]}));child.emit('exit',0);});return child;}});
  global.fetch=async (_url,request)=>{
   const body=JSON.parse(request.body);calls.push(body.action);
   if(options.offline)throw Error('Fixture offline');

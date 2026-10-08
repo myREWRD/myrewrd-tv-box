@@ -825,7 +825,7 @@ app.whenReady().then(async () => {
       const identity=currentProcessIdentity(app), health=path.join(INSTALL_DIR,'.health');
       fs.mkdirSync(health,{recursive:true});const file=path.join(health,String(process.pid)+'.json');
       const tick=()=>fs.writeFileSync(file,JSON.stringify({at:Date.now()}));tick();healthTimer=setInterval(tick,5000);
-      const child=spawn('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'runtime-watchdog.ps1'),'-ParentPid',String(process.pid),'-StartedAt',String(identity.parentStartedAt),'-Executable',app.getPath('exe'),'-HealthFile',file],{windowsHide:true,detached:true,stdio:'ignore'});
+      const child=spawn(path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'maintenance-launcher.exe'),['watchdog',String(process.pid),String(identity.parentStartedAt),app.getPath('exe'),file],{windowsHide:true,detached:true,stdio:'ignore'});
       child.once('error',()=>{});child.unref();
     } catch { /* Commissioning must verify supervisor availability on hardware. */ }
   }

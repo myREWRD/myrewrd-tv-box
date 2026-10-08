@@ -6,7 +6,7 @@
   "scripts": {
     "verify:acceptance-context": "node scripts/verify-acceptance-context.cjs",
     "verify:office-transition": "node scripts/verify-office-transition.cjs",
-    "verify:reset-reuse": "node scripts/verify-reset-reuse.cjs && node scripts/verify-reset-cleanup.cjs && node scripts/verify-reset-idle.cjs",
+    "verify:reset-reuse": "node scripts/verify-reset-reuse.cjs && node scripts/verify-reset-cleanup.cjs && node scripts/verify-reset-idle.cjs && node scripts/verify-reset-helper-launch.cjs",
     "verify:protected-playback": "node scripts/verify-protected-playback.cjs",
     "postinstall": "node node_modules/electron/install.js",
     "verify:presentation": "node scripts/verify-presentation.cjs && node scripts/verify-presentation-receiver.cjs",

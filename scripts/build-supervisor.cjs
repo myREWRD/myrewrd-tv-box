@@ -7,6 +7,8 @@ function build() {
   const root = path.join(__dirname, '..');
   execFileSync(path.join(process.env.SystemRoot, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe'),
     ['/nologo', '/target:winexe', '/r:System.Web.Extensions.dll', `/out:${path.join(root, 'src', 'update-supervisor.exe')}`, path.join(root, 'src', 'update-supervisor.cs')]);
+  execFileSync(path.join(process.env.SystemRoot, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe'),
+    ['/nologo','/target:winexe','/platform:x64', `/out:${path.join(root,'src','maintenance-launcher.exe')}`,path.join(root,'src','maintenance-launcher.cs')]);
 }
 module.exports = async context => { if (context.electronPlatformName === 'win32') build(); };
 module.exports.build = build;
