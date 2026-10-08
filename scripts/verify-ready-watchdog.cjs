@@ -1,5 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
-const base=fs.mkdtempSync(path.join(os.tmpdir(),'kuevy-ready-watchdog-'));
+// Windows CI TEMP may contain RUNNER~1. Match the supervisor's GetFullPath
+// identity instead of passing a short alias as the expected executable.
+const base=fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(),'kuevy-ready-watchdog-')));
 const ps=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe');
 const source=fs.readFileSync('src/runtime-watchdog.ps1','utf8'),q=s=>"'"+s.replaceAll("'","''")+"'";
 for(const kind of ['yield','wrong-stamp','stale','ordinary-crash','incomplete','wrong-manifest']){
