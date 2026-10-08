@@ -30,7 +30,7 @@ const protectedPlayback = createProtectedPlayback({ components });
 // Recovery may race a completed restart if its result could not be written.
 // Only one process may own this device profile and visible board.
 if (!app.requestSingleInstanceLock()) app.exit(0);
-app.on("second-instance", (_event,argv) => { if(argv.includes("--kuevy-reset")) void resetReuse.reset(); else if(mainWindow && !readyMessage) restoreBoard(); });
+app.on("second-instance", (_event,argv) => { if(argv.includes("--kuevy-provision-ready")) yieldReadyForProvisioning(); else if(argv.includes("--kuevy-reset")) void resetReuse.reset(); else if(mainWindow && !readyMessage) restoreBoard(); });
 
 function navigate(contents, url) {
   if (!allowedNavigation(url, API_BASE, config.tvToken)) return;
@@ -79,6 +79,15 @@ const INSTALL_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.join(app.getPath
 
 let readyMessage = null;
 let healthTimer = null;
+let watchdogHealth = null;
+function yieldReadyForProvisioning() {
+  try {
+    if(readyMessage!=='Ready to Provision' || !watchdogHealth || !resetReuse.prepareProvisioning())return;
+    if(healthTimer)clearInterval(healthTimer);
+    fs.writeFileSync(watchdogHealth.file,JSON.stringify({at:Date.now(),phase:'provisioning',startedAt:watchdogHealth.startedAt}));
+    app.quit();
+  } catch { /* Refuse changed or ambiguous Ready state; retain the installation. */ }
+}
 let mainWindow = null;
 let streamView = null; // BrowserView for streaming content (YouTube TV, Hulu, etc.)
 let streamPairingToken = null;
@@ -824,6 +833,7 @@ app.whenReady().then(async () => {
     try {
       const identity=currentProcessIdentity(app), health=path.join(INSTALL_DIR,'.health');
       fs.mkdirSync(health,{recursive:true});const file=path.join(health,String(process.pid)+'.json');
+      watchdogHealth={file,startedAt:identity.parentStartedAt};
       const tick=()=>fs.writeFileSync(file,JSON.stringify({at:Date.now()}));tick();healthTimer=setInterval(tick,5000);
       const child=spawn(path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'maintenance-launcher.exe'),['watchdog',String(process.pid),String(identity.parentStartedAt),app.getPath('exe'),file],{windowsHide:true,detached:true,stdio:'ignore'});
       child.once('error',()=>{});child.unref();

@@ -27,7 +27,8 @@ function New-NetFirewallRule { param($Name,$DisplayName,$Direction,$Action,$Prog
 function Invoke-WebRequest { param([switch]$UseBasicParsing,$Uri,$OutFile) [IO.File]::Copy(${quote(zip)},$OutFile) }
 function shutdown.exe { [IO.File]::WriteAllText((Join-Path $env:USERPROFILE 'restart.requested'),'mock');$global:LASTEXITCODE=0 }
 `;
-let script=fs.readFileSync(path.join(__dirname,'install-runtime.template.ps1'),'utf8').replace('#Requires -RunAsAdministrator','').replace(/^if \(\[Security\.Principal\.WindowsIdentity\].*$/m,'# Identity check replaced ONLY in isolated test copy; no production installer executed.').replace('param([switch]$NoRestart,[string]$RuntimeArchive)',()=>`param([switch]$NoRestart,[string]$RuntimeArchive)\n${mocks}\nfunction ExpandVerifiedRuntime {\n${expand}\n}`).replaceAll('@VERSION@','2.0.0').replaceAll('@HASH@',hash);
+const ready=fs.readFileSync(path.join(__dirname,'../src/ready-provision.ps1'),'utf8');
+let script=template.replace('#Requires -RunAsAdministrator','').replace(/^if \(\[Security\.Principal\.WindowsIdentity\].*$/m,'# Identity check replaced ONLY in isolated test copy; no production installer executed.').replace('param([switch]$NoRestart,[string]$RuntimeArchive,[switch]$ReadyForProvision)',()=>`param([switch]$NoRestart,[string]$RuntimeArchive,[switch]$ReadyForProvision)\n${mocks}\nfunction ExpandVerifiedRuntime {\n${expand}\n}\n${ready}`).replaceAll('@VERSION@','2.0.0').replaceAll('@HASH@',hash);
 const testScript=path.join(root,'mock-installer.ps1');fs.writeFileSync(testScript,script);
 function run(home,noRestart=false,expectFailure=false,archive=null){
  fs.mkdirSync(home,{recursive:true});const appdata=path.join(home,'AppData');fs.mkdirSync(appdata,{recursive:true});

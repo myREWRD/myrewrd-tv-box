@@ -4,6 +4,7 @@
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
+    "verify:ready-provision": "node scripts/verify-ready-provision.cjs && node scripts/verify-ready-watchdog.cjs && node scripts/verify-ready-compatibility.cjs",
     "verify:persistent-protection": "node scripts/verify-persistent-protection.cjs",
     "verify:acceptance-context": "node scripts/verify-acceptance-context.cjs",
     "verify:office-transition": "node scripts/verify-office-transition.cjs",

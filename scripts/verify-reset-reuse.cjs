@@ -72,6 +72,17 @@ function fixture(name,options={}) {
   else{assert.ok(!f.calls.includes('complete'));assert.equal(fs.existsSync(receipt),true);}
   console.log('PASS attended Ready receipt recovery '+kind);
  }
+ for(const kind of ['clean','paired','key','updating','incomplete','foreign','null-config','redirect']){
+  const f=fixture('provision-yield-'+kind,{updating:kind==='updating'});f.setConfig({});fs.unlinkSync(path.join(f.root,'config.json'));fs.mkdirSync(path.dirname(f.journal),{recursive:true});
+  fs.writeFileSync(f.journal,JSON.stringify({manifest_version:1,phase:kind==='incomplete'?'retired':'ready',device_id:uuid,api_origin:kind==='foreign'?'https://foreign.invalid':'https://fixture.invalid'}));
+  if(kind==='paired')f.setConfig({deviceId:uuid,tvToken:'fixture-old-token'});
+  if(kind==='key')fs.writeFileSync(path.join(f.profile,'reset-key.enc'),'preserve');
+  if(kind==='null-config')fs.writeFileSync(path.join(f.root,'config.json'),'null');
+  if(kind==='redirect')fs.symlinkSync(path.join(base,'unrelated'),path.join(f.root,'redirect'),'junction');
+  const before=fs.readFileSync(f.journal);let accepted=false;try{accepted=f.controller.prepareProvisioning()}catch{}
+  assert.equal(accepted,kind==='clean');assert.deepEqual(fs.readFileSync(f.journal),before);assert.equal(f.launched,0);assert.equal(f.calls.length,0);
+  console.log('PASS local Ready provisioning handoff '+kind);
+ }
  // No remote renderer IPC/reset channel is exposed. Only native shortcut/dialog.
  const main=fs.readFileSync('src/main.js','utf8');
  assert.ok(main.includes('Control+Alt+R'));assert.ok(!/ipcMain\.(?:on|handle)\([^\n]*resetReuse/.test(main));

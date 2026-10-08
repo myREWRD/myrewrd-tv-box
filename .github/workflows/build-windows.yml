@@ -128,6 +128,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-installer.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-ready-provision.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-ready-watchdog.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-ready-compatibility.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-installed-update.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-installed-retry.cjs

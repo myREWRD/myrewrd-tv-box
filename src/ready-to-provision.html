@@ -1,2 +1,8 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>KUEVY TV</title><style>body{background:#10121b;color:white;font:24px system-ui;display:grid;place-content:center;min-height:90vh;text-align:center}p{color:#bbc4d5;font-size:18px}</style><h1>KUEVY TV</h1><h2 id="state">Ready to Provision</h2><p id="next-step">Complete local reset maintenance before provisioning this box.</p><p>Windows and remote support are preserved. Ctrl+Alt+R opens local reset maintenance.</p></html>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>KUEVY TV</title>
+<style>body{margin:0;background:#10121b;color:white;font:24px system-ui,sans-serif;display:grid;place-content:center;min-height:100vh;text-align:center;padding:0 32px;box-sizing:border-box}p{color:#bbc4d5;font-size:18px}.brand{margin:0 auto 24px;padding:16px 24px;background:#fff;border-radius:16px;width:min(320px,70vw)}.brand img{display:block;width:100%;height:auto}h1{font-size:32px}</style></head>
+<body><div class="brand"><img src="pages/kuevy-horizontal-lockup.png" alt="KUEVY"></div>
+<h1 id="state">Ready to Provision</h1><p id="next-step">Complete local reset maintenance before provisioning this box.</p><p>Windows and remote support are preserved. Ctrl+Alt+R opens local reset maintenance.</p>
 <script>const state=new URLSearchParams(location.search).get("state")||"Ready to Provision";document.getElementById("state").textContent=state;if(state==="Ready to Provision")document.getElementById("next-step").textContent="Create a new TV Device in the KUEVY dashboard and run its current setup on this box.";</script>
+</body></html>

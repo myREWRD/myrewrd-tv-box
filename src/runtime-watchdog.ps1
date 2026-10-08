@@ -17,7 +17,14 @@ try {
   break
  }
  $journal=Join-Path $env:USERPROFILE '.kuevy-reset\state.json'
- if(Test-Path -LiteralPath $journal){$reset=Get-Content -LiteralPath $journal -Raw|ConvertFrom-Json;if($reset.phase -ne 'ready'){exit 0}}
+ if(Test-Path -LiteralPath $journal){
+  $reset=Get-Content -LiteralPath $journal -Raw|ConvertFrom-Json
+  if($reset.phase -ne 'ready'){exit 0}
+  if(Test-Path -LiteralPath $HealthFile){
+   $last=Get-Content -LiteralPath $HealthFile -Raw|ConvertFrom-Json
+   if($reset.manifest_version -eq 1 -and $last.phase -eq 'provisioning' -and $last.startedAt -eq $StartedAt -and $last.at -gt [DateTimeOffset]::UtcNow.AddMinutes(-2).ToUnixTimeMilliseconds()){exit 0}
+  }
+ }
  # Yield to the signed updater and any replacement main process.
  for($n=0;$n -lt 30;$n++){
   $live=@(Get-CimInstance Win32_Process|Where-Object {$_.ExecutablePath -and $_.ExecutablePath.StartsWith($root+'\',[StringComparison]::OrdinalIgnoreCase)})

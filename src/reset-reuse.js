@@ -42,7 +42,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
    body:JSON.stringify({action,device_id:config.deviceId,key,id:operation?.id,recovery}),signal:AbortSignal.timeout(15000)});
   const value=await response.json();if(!response.ok) throw Error(value.error || 'Reset could not be verified.');return value;
  }
- function preflight(operation=null,readyRecovery=false) {
+ function preflight(operation=null,readyRecovery=false,localOnly=false) {
   if(process.platform!=='win32') throw Error('Reset for reuse requires Windows.');
   if(isUpdating()) throw Error('Wait for the TV update to finish before resetting.');
   for(const target of [root,profile,directory,path.join(app.getPath('appData'),'myREWRD TV Box'),path.join(app.getPath('appData'),'myrewrd-tv-box')]) plain(target);
@@ -61,6 +61,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
    } else if(value.deviceId!==config.deviceId || value.tvToken!==config.tvToken || value.venueId!==config.venueId)throw Error('Conflicting local pairing. Dashboard-assisted cleanup required.');
   }
   if(operation && !matched && !readyRecovery)throw Error('No matching local identity; verify recovery at the office instead.');
+  if(localOnly)return;
   if(runPreflight)runPreflight();
   else execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',path.join(__dirname.replace(/app\.asar(?=[\\/])/,'app.asar.unpacked'),'assert-reset-idle.ps1'),'-ParentPid',String(process.pid)],{windowsHide:true,timeout:15000,stdio:'pipe'});
  }
@@ -145,6 +146,15 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
   } catch(error){await dialog.showMessageBox({type:'error',message:'Cleanup did not complete',detail:error.message});}
   finally{busy=false;}
  }
- return {initialise,reset,assisted,request,isReadyOffline};
+ function prepareProvisioning() {
+  if(busy)return false;
+  const value=journal(),config=getConfig();
+  if(value?.manifest_version!==1 || value.phase!=='ready' || config.deviceId || config.tvToken || config.resetKey)return false;
+  // Local setup is running; its process is intentionally refused by cleanup.
+  // This transition only validates clean Ready state and performs no deletion.
+  preflight(null,true,true);
+  return true;
+ }
+ return {initialise,reset,assisted,request,isReadyOffline,prepareProvisioning};
 }
 module.exports={createResetReuse,LEGACY};
