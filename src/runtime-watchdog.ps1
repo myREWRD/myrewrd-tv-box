@@ -22,7 +22,9 @@ try {
   if($reset.phase -ne 'ready'){exit 0}
   if(Test-Path -LiteralPath $HealthFile){
    $last=Get-Content -LiteralPath $HealthFile -Raw|ConvertFrom-Json
-   if($reset.manifest_version -eq 1 -and $last.phase -eq 'provisioning' -and $last.startedAt -eq $StartedAt -and $last.at -gt [DateTimeOffset]::UtcNow.AddMinutes(-2).ToUnixTimeMilliseconds()){exit 0}
+   # Windows PowerShell JSON may produce Decimal; compare the same Double
+   # representation as the native process timestamp without mixed-type rounding.
+   if($reset.manifest_version -eq 1 -and $last.phase -eq 'provisioning' -and [double]$last.startedAt -eq $StartedAt -and $last.at -gt [DateTimeOffset]::UtcNow.AddMinutes(-2).ToUnixTimeMilliseconds()){exit 0}
   }
  }
  # Yield to the signed updater and any replacement main process.
