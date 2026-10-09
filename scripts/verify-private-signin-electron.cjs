@@ -3,6 +3,8 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
 const {createPrivateSignIn}=require('../src/private-signin');
 const resultPath=process.argv[2];
 const record=value=>{if(resultPath)fs.writeFileSync(resultPath,JSON.stringify(value));};
+// Hosted Windows hidden-window fixtures use software rendering.
+app.disableHardwareAcceleration();
 app.setPath('userData',path.join(app.getPath('temp'),'myrewrd-private-signin-fixture-'+process.pid));
 app.on('window-all-closed',()=>{});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -13,14 +15,23 @@ app.whenReady().then(async()=>{
     if(new URL(request.url).pathname==='/hang')return new Promise(()=>{});
     return new Response('<!doctype html><style>input{display:block;width:300px;height:50px;margin:20px}</style><input type=email id=email><input type=password id=password><button id=continue>Continue</button><img src="/hang"><script>document.querySelector("button").onclick=()=>history.pushState({},"","/watch/home")</script>',{headers:{'content-type':'text/html'}});
   });
-  const handlers={},windows=[];
-  function Window(options){const w=new BrowserWindow(options);windows.push(w);return w;}
+  const handlers={},windows=[];let firstFailure=null;
+  const failure=(kind,error)=>{firstFailure??={kind,message:String(error?.reason||error?.message||error).slice(0,300)};};
+  function Window(options){
+    const w=new BrowserWindow(options);windows.push(w);
+    w.webContents.on('render-process-gone',(_event,details)=>failure('renderer-'+windows.indexOf(w),details));
+    const capture=w.webContents.capturePage.bind(w.webContents);
+    w.webContents.capturePage=(...args)=>capture(...args).catch(error=>{failure('capture',error);throw error;});
+    const load=w.loadFile.bind(w);
+    w.loadFile=(...args)=>load(...args).catch(error=>{failure('transport-load',error);throw error;});
+    return w;
+  }
   const remote=createPrivateSignIn({BrowserWindow:Window,ipcMain:{handle:(name,fn)=>handlers[name]=fn},apiBase:'https://fixture.invalid',getToken:()=> 'fixture',getKey:()=> 'fixture',canStart:()=>true,onStart(){},fetcher:async()=>({ok:true,json:async()=>({session:{kind:'provider-sign-in',id:'fixture',provider:'peacock',lease_ms:8000,offer:{type:'offer',sdp:'v=0'}}})})});
   try{
     stage='open';await remote.tick();const wc=windows[0].webContents,transport=windows[1].webContents;
     // A real IPC event carries the current frame. Do not retain the initial
     // about:blank frame across the transport's asynchronous loadFile navigation.
-    const event=()=>({sender:transport,senderFrame:transport.mainFrame});
+    const event=()=>{assert.equal(transport.isDestroyed(),false,'transport stopped: '+JSON.stringify(firstFailure));return {sender:transport,senderFrame:transport.mainFrame};};
     stage='capture';let image;for(let i=0;i<80&&!image;i++){await delay(150);image=await handlers['tv-signin-frame'](event());}
     assert.ok(image?.jpeg,'hidden provider supplies a frame before full page load');
     assert.ok(windows.every(w=>!w.isVisible()),'no private window appears on desktop');
@@ -38,5 +49,5 @@ app.whenReady().then(async()=>{
     assert.equal(remote.active,false,'SPA playback return closes all private windows');
     console.log('PASS actual Windows Electron private sign-in: hidden capture before load completion, point/text/erase IPC, SPA completion and no visible private window.');
     record({ok:true,checks:['hidden-capture','point','text','erase','SPA-completion','hidden-windows']});remote.dispose();app.exit(0);
-  }catch(error){record({ok:false,stage,error:String(error.stack||error.message)});remote.dispose();console.error(error);app.exit(1);}
+  }catch(error){record({ok:false,stage,firstFailure,error:String(error.stack||error.message)});remote.dispose();console.error(error);app.exit(1);}
 }).catch(error=>{record({ok:false,error:String(error.message)});console.error(error);app.exit(1);});
