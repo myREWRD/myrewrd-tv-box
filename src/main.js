@@ -111,7 +111,7 @@ function showMaintenance(message) {
   }
   if(mainWindow) mainWindow.loadFile(path.join(__dirname,"ready-to-provision.html"),{query:{state:message}}).catch(()=>{});
 }
-const resetReuse = createResetReuse({app,dialog,safeStorage,fetcher:fetch,getConfig:()=>resetIdentity,saveConfig:value=>{Object.assign(resetIdentity,value);saveConfig(value);},apiBase:API_BASE,isUpdating:()=>isUpdating || wifiSetup.active || providerAccounts.active || privateSignIn.active,restoreActive:()=>{readyMessage=null;config={...resetIdentity};restoreBoard();},showReady:showMaintenance});
+const resetReuse = createResetReuse({app,dialog,getDialogParent:()=>mainWindow,safeStorage,fetcher:fetch,getConfig:()=>resetIdentity,saveConfig:value=>{Object.assign(resetIdentity,value);saveConfig(value);},apiBase:API_BASE,isUpdating:()=>isUpdating || wifiSetup.active || providerAccounts.active || privateSignIn.active,restoreActive:()=>{readyMessage=null;config={...resetIdentity};restoreBoard();},showReady:showMaintenance});
 const gameDayProvider = createGameDayProvider({getConfig:()=>config,save:saveConfig});
 let currentMode = "regular"; // 'regular' | 'stream' | 'gameday' | 'live-game'
 let boardStatus = "connecting";

@@ -7,10 +7,16 @@ const {launchResetHelper} = require('./reset-helper-launch');
 const protection = require('./persistent-protection');
 const LEGACY = 'This legacy TV uses a shared or unverified credential and cannot be automatically reset for reuse. Complete decommissioning from the KUEVY TV Devices page.';
 function read(file) { if (!fs.existsSync(file)) return null; return JSON.parse(fs.readFileSync(file,'utf8')); }
-function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,isUpdating,showReady,restoreActive=()=>{},runPreflight=null,launch=spawn,fetcher=(...args)=>fetch(...args)}) {
+function createResetReuse({app,dialog,getDialogParent=()=>null,safeStorage,getConfig,saveConfig,apiBase,isUpdating,showReady,restoreActive=()=>{},runPreflight=null,launch=spawn,fetcher=(...args)=>fetch(...args)}) {
  const home=app.getPath('home'), profile=app.getPath('userData'), root=path.join(home,'myREWRD-TV-Box');
  const directory=path.join(home,'.kuevy-reset'), journalPath=path.join(directory,'state.json');
  let busy=false;
+ function nativeDialog(method,options) {
+  const parent=getDialogParent();
+  if(!parent || parent.isDestroyed())throw Error('KUEVY maintenance window unavailable.');
+  parent.show();if(parent.isMinimized())parent.restore();parent.focus();
+  return dialog[method](parent,options);
+ }
  function plain(target) {
   const full=path.resolve(target), boundary=path.resolve(home)+path.sep;
   if(!full.toLowerCase().startsWith(boundary.toLowerCase())) throw Error('Cleanup outside dedicated profile denied');
@@ -109,17 +115,17 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
     preflight();const prepared=await request('prepare');
     operation={manifest_version:1,id:prepared.id,device_id:prepared.device_id,venue_name:prepared.venue_name,device_name:prepared.device_name,phase:'prepared',recovery:protection.protect('reset-recovery',prepared.recovery).toString('base64')};write(operation);
    }
-   const answer=await dialog.showMessageBox({type:'warning',buttons:['Cancel','Confirm Reset'],defaultId:0,cancelId:0,
+   const answer=await nativeDialog('showMessageBox',{type:'warning',buttons:['Cancel','Confirm Reset'],defaultId:0,cancelId:0,
     title:'Reset KUEVY TV for reuse',message:`Reset ${operation.device_name} from ${operation.venue_name}?`,detail:'This removes this TV from its venue, revokes this installation’s access and prepares it for another venue. Windows will not be erased.'});
    if(answer.response!==1) {const cancelled=await request('cancel',operation);if(cancelled.cancelled){fs.unlinkSync(journalPath);restoreActive();}else{operation.phase='retired';write(operation);showReady('Reset incomplete — use Ctrl+Alt+R to resume');}return;}
    preflight();operation.phase='committing';write(operation);showReady('Reset incomplete — verifying server retirement');await request('commit',operation);operation.phase='retired';write(operation);await cleanup();
-  } catch(error) { await dialog.showMessageBox({type:'error',message:'Reset did not complete',detail:error.message}); }
+  } catch(error) { try{await nativeDialog('showMessageBox',{type:'error',message:'Reset did not complete',detail:error.message});}catch{/* Preserve the journal when the maintenance window has closed. */} }
   finally {busy=false;}
  }
  async function assisted() {
   if(busy)return;busy=true;
   try {
-   const chosen=await dialog.showOpenDialog({title:'Select dashboard-authorized KUEVY cleanup receipt',properties:['openFile'],filters:[{name:'KUEVY cleanup receipt',extensions:['json']}]});
+   const chosen=await nativeDialog('showOpenDialog',{title:'Select dashboard-authorized KUEVY cleanup receipt',properties:['openFile'],filters:[{name:'KUEVY cleanup receipt',extensions:['json']}]});
    if(chosen.canceled)return;
    const file=chosen.filePaths[0];plain(file);
    const receipt=read(file);
@@ -132,7 +138,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
    const previous=journal();
    const readyRecovery=previous?.manifest_version===1 && previous.phase==='ready' && previous.device_id===operation.device_id && !getConfig().deviceId && !getConfig().tvToken && !getConfig().resetKey;
    preflight(operation,readyRecovery);
-   const answer=await dialog.showMessageBox({type:'warning',buttons:['Cancel','Confirm cleanup'],defaultId:0,cancelId:0,title:'Reset KUEVY TV for reuse',message:`Clean up retired ${operation.device_name} from ${operation.venue_name}?`,detail:'The server has retired this installation. Remove only its verified local KUEVY state. Windows will not be erased.'});
+   const answer=await nativeDialog('showMessageBox',{type:'warning',buttons:['Cancel','Confirm cleanup'],defaultId:0,cancelId:0,title:'Reset KUEVY TV for reuse',message:`Clean up retired ${operation.device_name} from ${operation.venue_name}?`,detail:'The server has retired this installation. Remove only its verified local KUEVY state. Windows will not be erased.'});
    if(answer.response!==1)return;
    preflight(operation,readyRecovery);
    if(readyRecovery){
@@ -143,7 +149,7 @@ function createResetReuse({app,dialog,safeStorage,getConfig,saveConfig,apiBase,i
     preflight(operation,true);await request('complete',operation);operation.phase='ready';operation.recovery=null;write(operation);fs.unlinkSync(file);showReady('Ready to Provision');
    }
    else{write(operation);fs.unlinkSync(file);await cleanup();}
-  } catch(error){await dialog.showMessageBox({type:'error',message:'Cleanup did not complete',detail:error.message});}
+  } catch(error){try{await nativeDialog('showMessageBox',{type:'error',message:'Cleanup did not complete',detail:error.message});}catch{/* Recovery remains pending until the maintenance window returns. */}}
   finally{busy=false;}
  }
  function prepareProvisioning() {

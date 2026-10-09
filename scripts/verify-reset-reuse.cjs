@@ -12,8 +12,9 @@ function fixture(name,options={}) {
  fs.writeFileSync(path.join(root,'config.json'),JSON.stringify(config));
  const journal=path.join(home,'.kuevy-reset','state.json');
  const app={getPath:key=>({home,appData,userData:profile,exe:path.join(root,'runtime-a','myREWRD TV Box.exe')})[key],quit:()=>quit++};
- const dialog={showOpenDialog:async()=>({canceled:false,filePaths:[path.join(home,'receipt.json')]}),showMessageBox:async value=>{if(value.type==='error'){errors.push(value.detail);return {response:0};}if(options.changeAtConfirmation){const state=JSON.parse(fs.readFileSync(journal));state.phase='retired';fs.writeFileSync(journal,JSON.stringify(state));}return {response:options.cancel?0:1};}};
- const controller=createResetReuse({app,dialog,safeStorage,getConfig:()=>config,saveConfig:value=>{config={...value};fs.writeFileSync(path.join(profile,'config.json'),JSON.stringify(config));},apiBase:'https://fixture.invalid',isUpdating:()=>Boolean(options.updating),runPreflight:()=>{},restoreActive:()=>restored++,showReady:value=>ready.push(value),launch:(_helper,args)=>{launched++;const child=new EventEmitter();child.unref=()=>{};child.kill=()=>{};setImmediate(()=>{fs.writeFileSync(path.join(path.dirname(journal),'cleanup-ready.json'),JSON.stringify({phase:'helper-ready',parent_pid:process.pid,nonce:args[4]}));child.emit('exit',0);});return child;}});
+ const parent={isDestroyed:()=>Boolean(options.destroyedParent),show:()=>{},isMinimized:()=>false,restore:()=>{},focus:()=>{}};
+ const dialog={showOpenDialog:async(owner)=>{assert.equal(owner,parent);return({canceled:false,filePaths:[path.join(home,'receipt.json')]});},showMessageBox:async (owner,value)=>{assert.equal(owner,parent);if(value.type==='error'){errors.push(value.detail);return {response:0};}if(options.changeAtConfirmation){const state=JSON.parse(fs.readFileSync(journal));state.phase='retired';fs.writeFileSync(journal,JSON.stringify(state));}return {response:options.cancel?0:1};}};
+ const controller=createResetReuse({app,dialog,getDialogParent:()=>options.missingParent?null:parent,safeStorage,getConfig:()=>config,saveConfig:value=>{config={...value};fs.writeFileSync(path.join(profile,'config.json'),JSON.stringify(config));},apiBase:'https://fixture.invalid',isUpdating:()=>Boolean(options.updating),runPreflight:()=>{},restoreActive:()=>restored++,showReady:value=>ready.push(value),launch:(_helper,args)=>{launched++;const child=new EventEmitter();child.unref=()=>{};child.kill=()=>{};setImmediate(()=>{fs.writeFileSync(path.join(path.dirname(journal),'cleanup-ready.json'),JSON.stringify({phase:'helper-ready',parent_pid:process.pid,nonce:args[4]}));child.emit('exit',0);});return child;}});
  global.fetch=async (_url,request)=>{
   const body=JSON.parse(request.body);calls.push(body.action);
   if(options.offline)throw Error('Fixture offline');
@@ -46,6 +47,12 @@ function fixture(name,options={}) {
    else{assert.equal(f.launched,0);assert.ok(f.errors.length);assert.ok(!f.calls.includes('commit'));assert.ok(fs.existsSync(path.join(f.root,'config.json')));}
   }
   console.log('PASS reset controller '+kind);
+ }
+ for(const kind of ['missingParent','destroyedParent']) {
+  const f=fixture('dialog-'+kind,{[kind]:true});await f.controller.initialise();await f.controller.reset();
+  assert.ok(fs.existsSync(f.journal));assert.ok(!f.calls.includes('commit'));assert.equal(f.launched,0);assert.equal(f.quit,0);
+  assert.ok(fs.existsSync(path.join(f.root,'config.json')));await f.controller.assisted();assert.equal(f.launched,0);
+  console.log('PASS unavailable maintenance parent '+kind);
  }
  const migrating=fixture('legacy-receipt-migration',{retired:true});
  fs.mkdirSync(path.dirname(migrating.journal),{recursive:true});
