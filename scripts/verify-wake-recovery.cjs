@@ -9,7 +9,7 @@ const base = 'https://app.myrewrd.com';
 const token = 'tv_0123456789abcdef'; // synthetic fixture only
 const source = fs.readFileSync(path.join(__dirname, '../src/main.js'), 'utf8');
 
-function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenReady: async () => [] }) {
+function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenReady: async () => [] }, acceptanceState = null) {
   const timers = new Map(); let nextTimer = 1;
   const files = new Map(saved ? [[path.join('/fixture', 'config.json'), JSON.stringify(saved)]] : []);
   const logs = []; const requests = []; const windows = [];
@@ -44,12 +44,14 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
   const powerMonitor = new EventEmitter();
   const context = vm.createContext({
     require(name) {
-      if (name === 'electron') return { app, components, BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ bounds: { width: 1920, height: 1080 }, workAreaSize: { width: 1920, height: 1032 } }) } };
+      if (name === 'electron') return { app, components, session:{defaultSession:{webRequest:{onBeforeSendHeaders(){}}}}, globalShortcut:{register(){},unregisterAll(){}},BrowserWindow: Window, BrowserView: Window, ipcMain, powerMonitor, screen: { getPrimaryDisplay: () => ({ bounds: { width: 1920, height: 1080 }, workAreaSize: { width: 1920, height: 1032 } }) } };
       if (name === 'fs') return {
         existsSync: p => files.has(p), readFileSync: p => files.get(p),
         mkdirSync() {}, writeFileSync: (p, data) => files.set(p, data),
       };
       if (name === './recovery') return { tokenFromBoardUrl, createRecovery: opts => createRecovery({ ...opts, setTimer: context.setTimeout, clearTimer: context.clearTimeout }) };
+      if (name === './reset-reuse') return {createResetReuse:()=>({initialise:async()=>false,reset:async()=>{},assisted:async()=>{},isReadyOffline:()=>Boolean(acceptanceState?.ready)})};
+      if (name === './acceptance-context') return {enrollmentMetadata:()=>{if(acceptanceState?.expired)throw Error('Expired fixture');return acceptanceState?.origin?{origin:acceptanceState.origin}:null;},readContext:()=>acceptanceState?.missing?null:{origin:acceptanceState?.origin},createTransport:()=>({fetch:(...args)=>context.fetch(...args),verify:async()=>{},electronHeaders:()=>({})})};
       if (name === './sponsor') return require('../src/sponsor');
       if (name === './navigation') return require('../src/navigation');
       if (name === './provider-user-agent') return require('../src/provider-user-agent');
@@ -73,7 +75,7 @@ function boot(saved, components = { WIDEVINE_CDM_ID: 'fixture-widevine', whenRea
       return require(name);
     },
     __dirname: path.join(__dirname, '../src'), URL, AbortController,
-    process: Object.assign(new EventEmitter(), { execPath: '/fixture/app.exe', env: {}, platform: 'win32' }),
+    process: Object.assign(new EventEmitter(), { execPath: '/fixture/app.exe', env: {}, platform: 'win32',argv:[] }),
     console: { log: (...args) => logs.push(args.join(' ')), error: (...args) => logs.push(args.join(' ')) },
     setTimeout: (fn, delay) => { const id = nextTimer++; timers.set(id, { fn, delay }); return id; },
     clearTimeout: id => timers.delete(id),
@@ -91,6 +93,18 @@ const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(
 module.exports = { boot, settle };
 
 if (require.main === module) (async () => {
+  for(const ready of [false,true]) {
+    const blocked=boot(ready?null:{paired:true,tvToken:token},undefined,{expired:true,ready});await settle();
+    assert.equal(blocked.requests.length,0);assert.equal(blocked.windows[0].urls.length,0);
+    assert.match(blocked.windows[0].lastFile.options.query.state,ready ? /Ready to Provision/ : /refresh access/);
+  }
+  const officeOrigin='https://ssdt-dashboard-fixture-byvenuecreative.vercel.app';
+  const office=boot({paired:true,tvToken:token,apiOrigin:officeOrigin},undefined,{origin:officeOrigin});await settle();
+  assert.ok(office.requests.length);assert.ok(office.requests.every(request=>request.url.startsWith(officeOrigin+'/')));
+  const imported=boot({paired:true,tvToken:token},undefined,{origin:officeOrigin});await settle();
+  assert.equal(imported.requests.length,0);assert.equal(imported.windows[0].urls.length,0);
+  const deletedContext=boot({paired:true,tvToken:token,apiOrigin:officeOrigin},undefined,{origin:officeOrigin,missing:true});await settle();
+  assert.equal(deletedContext.requests.length,0);assert.equal(deletedContext.windows[0].urls.length,0);
   for (const value of ['javascript:alert(1)', 'file:///C:/Windows/win.ini', 'http://youtube.com', 'https://youtube.com.evil.example', 'https://user:secret@youtube.com', `${base}/dashboard`, 'https://127.0.0.1']) {
     assert.equal(allowedNavigation(value, base, token), false);
   }

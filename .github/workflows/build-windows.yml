@@ -76,6 +76,15 @@ jobs:
           python -m pip install castlabs-evs==1.3.2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify isolated office acceptance context
+        run: |
+          node scripts/verify-persistent-protection.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-acceptance-context.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-office-transition.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Require playback acceptance before release build
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
@@ -95,6 +104,9 @@ jobs:
           node scripts/build-installer.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         
+      - name: Verify reset and reuse
+        run: npm run verify:reset-reuse
+
       - name: Verify Windows runtime and recovery
         run: |
           node scripts/verify-protected-playback.cjs
@@ -115,6 +127,12 @@ jobs:
           powershell.exe -NoProfile -File scripts/verify-remote-status.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-installer.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-ready-provision.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-ready-watchdog.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-ready-compatibility.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-installed-update.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

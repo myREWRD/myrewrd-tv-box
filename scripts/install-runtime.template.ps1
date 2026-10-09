@@ -1,5 +1,5 @@
 #Requires -RunAsAdministrator
-param([switch]$NoRestart)
+param([switch]$NoRestart,[string]$RuntimeArchive,[switch]$ReadyForProvision)
 $ErrorActionPreference = 'Stop'
 $env:PSModulePath = "$PSHOME\Modules"
 if ([Security.Principal.WindowsIdentity]::GetCurrent().Name -inotmatch ('^' + [regex]::Escape($env:COMPUTERNAME) + '\\(?:myrewrd|KUEVY)$')) { throw 'Run under the dedicated local KUEVY or myrewrd Windows account as administrator.' }
@@ -54,6 +54,9 @@ foreach ($slot in @('runtime-a','runtime-b')) {
   $slotPath = Join-Path $root $slot
   if ((Test-Path -LiteralPath $slotPath) -and ((Get-Item -LiteralPath $slotPath).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Redirected runtime slot denied' }
 }
+if ($alreadyInstalled -and $ReadyForProvision -and (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.kuevy-reset\state.json'))) {
+  Update-KuevyReadyRuntime -Root $root -Startup $startup -Archive $RuntimeArchive -Version $version -ArchiveHash $runtimeHash -AsarHash '@ASAR_HASH@' -HelperHash '@HELPER_HASH@'
+}
 if (!$alreadyInstalled) {
   if (!$NoRestart -and !(Test-Path -LiteralPath (Join-Path $env:APPDATA 'myREWRD TV Box\config.json'))) { throw 'Use the dashboard setup script to provision a new box first.' }
   $runtime = Join-Path $root 'runtime-a'
@@ -66,7 +69,14 @@ if (!$alreadyInstalled) {
   [IO.Directory]::CreateDirectory($stage) | Out-Null
   if (!$resume) {
   $zip = Join-Path $stage 'runtime.zip'
-  Invoke-WebRequest -UseBasicParsing -Uri ('https://github.com/myREWRD/myrewrd-tv-box/releases/download/latest/myREWRD.TV.Box.'+$version+'.zip') -OutFile $zip
+  if ($RuntimeArchive) {
+    $source = [IO.Path]::GetFullPath($RuntimeArchive)
+    $item = Get-Item -LiteralPath $source
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Plain reviewed candidate archive required' }
+    Copy-Item -LiteralPath $source -Destination $zip
+  } else {
+    Invoke-WebRequest -UseBasicParsing -Uri ('https://github.com/myREWRD/myrewrd-tv-box/releases/download/latest/myREWRD.TV.Box.'+$version+'.zip') -OutFile $zip
+  }
   ExpandVerifiedRuntime -ArchivePath $zip -Destination (Join-Path $stage 'payload') -ExpectedHash $runtimeHash -ExpectedVersion $version
   }
 }

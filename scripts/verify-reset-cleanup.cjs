@@ -1,0 +1,53 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {spawnSync}=require('node:child_process');
+if(process.platform!=='win32')throw Error('Windows cleanup verification requires Windows');
+// A runner TEMP alias can cross a junction that the real cleanup correctly refuses.
+const base=fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()),'kuevy-cleanup-fixture-'));
+const id='11111111-1111-4111-8111-111111111111';
+const original=fs.readFileSync('src/reset-cleanup.ps1','utf8').replace(/^param[^\n]*\r?\n/,'');
+const source=original;
+for(const kind of ['success','partial','resume','conflict','slot-conflict','redirect','process','outside','startup-failure','bad-journal','recovery-launch-failure','missing-handoff','wrong-handoff']) {
+ const home=path.join(base,kind),root=path.join(home,'myREWRD-TV-Box'),profile=path.join(home,'Roaming','myREWRD TV Box'),journal=path.join(home,'.kuevy-reset','state.json'),exe=path.join(root,'runtime-a','myREWRD TV Box.exe');
+ for(const folder of [root,profile,path.dirname(journal),path.dirname(exe)])fs.mkdirSync(folder,{recursive:true});
+ fs.writeFileSync(exe,'immutable-fixture');fs.writeFileSync(path.join(root,'config.json'),JSON.stringify({deviceId:id}));
+ fs.writeFileSync(path.join(profile,'Cookies'),'old-venue-fixture');
+ const chrome=path.join(home,'Local','Google','Chrome','User Data','Cookies');fs.mkdirSync(path.dirname(chrome),{recursive:true});fs.writeFileSync(chrome,'preserve');
+ const support=path.join(home,'remote-support-fixture');fs.writeFileSync(support,'preserve');
+ fs.writeFileSync(journal,JSON.stringify({manifest_version:kind==='bad-journal'?2:1,phase:'retired',device_id:id}));
+ if(kind!=='missing-handoff')fs.writeFileSync(path.join(path.dirname(journal),'cleanup-go.json'),JSON.stringify({phase:'handoff-approved',nonce:(kind==='wrong-handoff'?'b':'a').repeat(64),parent_pid:999999}));
+ fs.writeFileSync(path.join(path.dirname(journal),'assert-reset-idle.ps1'),'# fixture only; no registry/system inspection');
+ fs.copyFileSync('src/reset-owned-copies.ps1',path.join(path.dirname(journal),'reset-owned-copies.ps1'));
+ if(kind==='conflict')fs.writeFileSync(path.join(profile,'config.json'),JSON.stringify({deviceId:'other'}));
+ if(kind==='slot-conflict')fs.writeFileSync(path.join(root,'runtime-a','config.json'),JSON.stringify({deviceId:'other'}));
+ if(kind==='redirect')fs.symlinkSync(path.dirname(chrome),path.join(profile,'redirect'),'junction');
+ if(kind==='resume')fs.rmSync(profile,{recursive:true});
+ const harness=`$ReadyNonce='${'a'.repeat(64)}';$Journal=$env:FIXTURE_JOURNAL;$ParentPid=999999;$Executable=$env:FIXTURE_EXE
+ function Get-Process {return $null}
+ function Get-CimInstance {if($env:FIXTURE_CASE -eq 'process'){return @{ExecutablePath=(Join-Path $env:USERPROFILE 'myREWRD-TV-Box\\update-supervisor.exe')}};return @()}
+ function Start-Process {param($FilePath,$WindowStyle);[IO.File]::AppendAllText($env:FIXTURE_LAUNCH,'launch');if($env:FIXTURE_CASE -eq 'recovery-launch-failure'){throw 'Fixture launch refusal'}}
+ function Remove-Item {param($LiteralPath,[switch]$Recurse,[switch]$Force);if(($env:FIXTURE_CASE -in @('partial','recovery-launch-failure')) -and $LiteralPath -match 'config.json$'){throw 'Fixture sensitive provider diagnostic'};Microsoft.PowerShell.Management\\Remove-Item -LiteralPath $LiteralPath -Recurse:$Recurse -Force:$Force}
+ ${source}`;
+ const file=path.join(home,'harness.ps1');fs.writeFileSync(file,harness);
+ const startup=path.join(home,'Roaming','Microsoft','Windows','Start Menu','Programs','Startup');
+ if(kind==='startup-failure'){fs.mkdirSync(path.dirname(startup),{recursive:true});fs.writeFileSync(startup,'block-ready-launcher');}
+ const launchFile=path.join(home,'launch-fixture.txt');
+ const env={...process.env,USERPROFILE:home,APPDATA:path.join(home,'Roaming'),FIXTURE_JOURNAL:journal,FIXTURE_EXE:kind==='outside'?path.join(base,'outside.exe'):exe,FIXTURE_CASE:kind,FIXTURE_LAUNCH:launchFile};
+ const result=spawnSync('powershell.exe',['-NoProfile','-File',file],{env,windowsHide:true,encoding:'utf8',timeout:20000});
+ const state=JSON.parse(fs.readFileSync(journal,'utf8'));
+ if(['success','resume'].includes(kind)){
+  assert.equal(result.status,0,result.stderr);assert.equal(state.phase,'ready');assert.equal(fs.existsSync(path.join(root,'config.json')),false);assert.equal(fs.existsSync(profile),false);assert.ok(fs.existsSync(path.join(startup,'myREWRD-TV-Box.bat')));
+ }else{
+  assert.equal(result.status,1,kind+' accepted');assert.equal(state.phase,'retired');
+  if(kind==='bad-journal'){assert.equal(fs.existsSync(path.join(path.dirname(journal),'cleanup-status.json')),false);assert.equal(fs.existsSync(path.join(root,'config.json')),true);assert.equal(fs.readFileSync(path.join(profile,'Cookies'),'utf8'),'old-venue-fixture');}else{
+  const diagnostic=JSON.parse(fs.readFileSync(path.join(path.dirname(journal),'cleanup-status.json'),'utf8'));
+  assert.deepEqual(Object.keys(diagnostic).sort(),['code','failed_at','stage']);assert.equal(typeof diagnostic.code,'number');
+  assert(!JSON.stringify(diagnostic).includes('sensitive'));assert(!JSON.stringify(diagnostic).includes(home));
+  if(['partial','recovery-launch-failure'].includes(kind))assert.equal(diagnostic.stage,'local-delete');
+  if(['missing-handoff','wrong-handoff'].includes(kind)){assert.equal(diagnostic.stage,'handoff');assert.equal(fs.existsSync(path.join(root,'config.json')),true);assert.equal(fs.readFileSync(path.join(profile,'Cookies'),'utf8'),'old-venue-fixture');}
+  }
+ }
+ if(['outside','bad-journal'].includes(kind))assert.equal(fs.existsSync(launchFile),false,'Unvalidated executable launched');
+ else assert.equal(fs.readFileSync(launchFile,'utf8'),'launch','Expected exactly one Ready/recovery launch');
+ assert.equal(fs.readFileSync(chrome,'utf8'),'preserve');assert.equal(fs.readFileSync(support,'utf8'),'preserve');assert.equal(fs.readFileSync(exe,'utf8'),'immutable-fixture');
+ console.log('PASS Windows cleanup '+kind);
+}
