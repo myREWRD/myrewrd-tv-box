@@ -1,0 +1,24 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const root = path.join(__dirname, '../src/pages');
+const html = fs.readFileSync(path.join(root, 'enrollment.html'), 'utf8');
+assert.match(html, /<title>KUEVY Receiver Setup<\/title>/);
+assert.doesNotMatch(html, /myREWRD/);
+const logo = html.match(/<img src="([^"]+)" alt="KUEVY"/)[1];
+assert.ok(fs.existsSync(path.join(root, logo)));
+assert.ok(fs.readFileSync(path.join(root, 'presentation.html'), 'utf8').includes(`src="${logo}"`));
+assert.match(html, /default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'/);
+assert.doesNotMatch(html, /https?:|data:|unsafe-inline|unsafe-eval/);
+const elements = { code: {}, expiry: {} };
+let tick;
+const context = { URLSearchParams, Date, location: { search: '?code=ABCDEF123456&expires=' + encodeURIComponent(new Date(Date.now() + 60000).toISOString()) },
+  document: { getElementById: id => elements[id] }, setInterval: fn => { tick = fn; } };
+vm.runInNewContext(fs.readFileSync(path.join(root, 'enrollment.js'), 'utf8'), context);
+assert.equal(elements.code.textContent, 'ABCD – EF12 – 3456');
+context.Date = class extends Date { static now() { return Date.now() + 120000; } };
+tick();
+assert.equal(elements.code.textContent, 'Setup expired');
+assert.equal(elements.expiry.textContent, 'Start receiver setup again from TV Devices.');
+console.log('PASS enrollment branding: existing local KUEVY PNG, restrictive CSP, offline code grouping and expiry.');
