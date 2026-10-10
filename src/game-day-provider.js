@@ -1,4 +1,4 @@
-const HOMES = Object.freeze({youtube:'https://tv.youtube.com/',youtube_video:'https://www.youtube.com/',hulu:'https://www.hulu.com/',peacock:'https://www.peacocktv.com/',espn:'https://www.espn.com/watch/'});
+const HOMES = Object.freeze({youtube:'https://tv.youtube.com/',youtube_video:'https://www.youtube.com/',hulu:'https://www.hulu.com/',peacock:'https://www.peacocktv.com/',espn:'https://www.espn.com/watch/',prime:'https://www.primevideo.com/'});
 function providerId(value) { return Object.hasOwn(HOMES,value) ? value : null; }
 // Only allowlisted playback routes are retained in the local paired-device config. Never retain sign-in redirects,
 // arbitrary navigation, query tokens, account paths, or provider cookies here.

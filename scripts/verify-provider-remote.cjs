@@ -13,6 +13,9 @@ const apply = command => applyRemoteCommand(command,context);
 (async () => {
   for (const bad of ['file:///C:/Windows', 'https://app.myrewrd.com/tv/example', 'https://accounts.google.com/', 'http://tv.youtube.com/', 'https://hulu.com.evil.invalid/', 'https://user:password@hulu.com/', 'https://hulu.com:444/']) assert.equal(providerPage(bad),false);
   assert.equal(await apply({ type:'provider',provider:'youtube' }),'applied'); assert.equal(opened[0],'https://tv.youtube.com/');
+  assert.equal(await apply({ type:'provider',provider:'prime',url:'https://evil.invalid/' }),'applied'); assert.equal(opened[1],'https://www.primevideo.com/');
+  assert.equal(providerPage('https://www.primevideo.com/'),true);
+  for(const bad of ['https://www.primevideo.com.evil.invalid/','https://accounts.primevideo.com/','https://amazon.com/ap/signin','http://www.primevideo.com/','https://user:password@www.primevideo.com/','https://www.primevideo.com:444/'])assert.equal(providerPage(bad),false);
   assert.equal(await apply({ type:'provider',provider:'__proto__' }),'unavailable');
   assert.equal(await apply({ type:'key',key:'Control+L' }),'unavailable'); assert.equal(events.length,0);
   await apply({ type:'key',key:'ShiftTab' }); assert.deepEqual(events.splice(0),[{ type:'keyDown',keyCode:'Tab',modifiers:['shift'] },{ type:'keyUp',keyCode:'Tab',modifiers:['shift'] }]);

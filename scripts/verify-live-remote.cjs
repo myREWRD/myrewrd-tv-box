@@ -94,6 +94,17 @@ async function run(name, test) {
     await b.remote.tick(); let scans = 0; b.scan(() => { scans++; return false; });
     assert.equal((await b.invoke('tv-live-frame')).toString(), 'jpeg'); assert.equal(scans, 2);
   });
+  await run('Prime home permits capture with unchanged privacy scans', async b => {
+    b.mainFrame.url='https://www.primevideo.com/';await b.remote.tick();
+    assert.equal((await b.invoke('tv-live-frame')).toString(),'jpeg');
+  });
+  for(const url of ['https://www.primevideo.com/ap/signin','https://www.amazon.com/ap/signin','https://www.primevideo.com.evil.invalid/'])await run('Prime account/foreign destination blocked: '+url,async b=>{
+    b.mainFrame.url=url;await b.remote.tick();assert.equal(b.windows.length,0);assert.equal(b.captures(),0);
+  });
+  await run('Prime sensitive input prevents capture',async b=>{
+    b.mainFrame.url='https://www.primevideo.com/';await b.remote.tick();b.scan(()=>true);
+    assert.equal(await b.invoke('tv-live-frame'),null);assert.equal(b.captures(),0);
+  });
   for (const result of [true, undefined]) await run(`sensitive or unknown scan ${result} fails closed`, async b => {
     await b.remote.tick(); b.scan(() => result);
     assert.equal(await b.invoke('tv-live-frame'), null); assert.equal(b.captures(), 0);
