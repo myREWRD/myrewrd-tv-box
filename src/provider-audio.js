@@ -4,7 +4,7 @@ function mediaMuteCode(muted, volume) {
   if (typeof muted !== 'boolean') throw new TypeError('Expected boolean mute state');
   if(volume!==undefined && (!Number.isInteger(volume) || volume<0 || volume>100))throw new TypeError('Invalid volume');
   return `(() => {
-    if (location.protocol !== 'https:' || !['youtube.com','hulu.com','peacocktv.com','espn.com'].some(h => location.hostname === h || location.hostname.endsWith('.' + h)) || location.hostname.startsWith('accounts.')) return false;
+    if (location.protocol !== 'https:' || !(location.hostname === 'www.primevideo.com' || ['youtube.com','hulu.com','peacocktv.com','espn.com'].some(h => location.hostname === h || location.hostname.endsWith('.' + h))) || location.hostname.startsWith('accounts.')) return false;
     const muted = ${muted};
     const volume = ${volume===undefined?'null':volume/100};
     let count=0, matched=true;

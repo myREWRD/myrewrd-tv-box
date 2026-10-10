@@ -54,3 +54,8 @@ assert.equal(resumeUrl('youtube_video','https://www.youtube.com/live/1FwetWkAkdc
 assert.equal(resumeUrl('youtube','https://www.youtube.com/watch?v=1FwetWkAkdc'),null);
 assert.equal(resumeUrl('youtube_video','https://tv.youtube.com/watch/test'),null);
 assert.equal(resumeUrl('youtube_video','https://www.youtube.com/account?v=1FwetWkAkdc'),null);
+assert.equal(controller.choose('prime'),'https://www.primevideo.com/');
+controller.capture('https://www.primevideo.com/detail/example?token=private');
+assert.equal(controller.target(),HOMES.prime,'Prime opens home without retaining unverified playback or account URLs');
+assert.equal(createGameDayProvider({getConfig:()=>config,save(){}}).target(),HOMES.prime,'Prime selection survives restart');
+assert.equal(resumeUrl('prime','https://www.primevideo.com/ap/signin?token=private'),null);

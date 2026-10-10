@@ -100,7 +100,7 @@ jobs:
       - name: Chromium provider audio controls
         run: |
           $fixture = Start-Process -FilePath './node_modules/electron/dist/electron.exe' -ArgumentList 'scripts/verify-provider-audio-electron.cjs' -WindowStyle Hidden -PassThru -Wait
-          $result = Get-Content ../tv-presentation-validation/provider-audio-electron.json -Raw | ConvertFrom-Json
+          $result = Get-Content ../tv-presentation-validation/prime-provider-audio-electron.json -Raw | ConvertFrom-Json
           $result | ConvertTo-Json -Depth 5
           if ($fixture.ExitCode -ne 0 -or $result.status -ne 'passed') { exit 1 }
       - name: Chromium preview privacy geometry

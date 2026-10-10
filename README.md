@@ -352,3 +352,16 @@ The supervisor compares JSON handoff timestamps using the same Double representa
 ## Receiver setup branding — October 9, 2026 candidate
 
 Version 2.3.32 changes only the locally packaged receiver enrollment screen to KUEVY using the existing presentation PNG and stylesheet. Its CSP permits that local image while retaining `default-src 'none'`, self-only scripts/styles and `connect-src 'none'`. Code generation, expiry, encrypted receiver trust, device identity, updater and legacy names remain unchanged. Published 2.3.31 is immutable. This candidate is not a signed production release or a fleet/provisioning promotion; signed Windows build, review, updater and physical acceptance remain required through the existing release process.
+# 2026-10-10 — Prime Video candidate 2.3.33
+
+The named Game Day provider registry now includes `prime`, opening only `https://www.primevideo.com/`. Provider commands use this fixed destination; caller-supplied URLs are ignored. Remote input and media operations recognize only the exact `www.primevideo.com` host. Amazon account redirects remain outside live preview/control, and existing sensitive-document/input scanning stays in force.
+
+Prime Video uses attended provider-owned sign-in with the box's existing provider session. There is no Prime credential-vault adapter, session export, user-agent override or DRM bypass. Selecting Prime survives restart, but Prime returns to its home page: playback route restoration and automatic fullscreen are not claimed until actual routes are independently observed and verified. Choose the program and fullscreen in the provider UI.
+
+Dashboard controls require 2.3.33 or newer for this new provider; older boxes retain their existing controls and reject Prime commands before queuing. This is a source candidate, not an accepted release. Production/provisioning remain 2.3.32 until signed Windows, independent review, explicitly scoped physical Prime picture/audio acceptance, immutable asset verification and coordinated release approval complete. Recovery uses the existing A/B updater without resetting identity or provider sessions.
+
+## October 10 — owner-approved coordinated 2.3.33 release
+
+This supersedes the pending acceptance status above. The signed production-vmp candidate passed Windows CI, package/source and public ZIP verification, independent review and the existing A/B updater on TV Box V1. The helper receipt confirms UUID/token/venue/receiver trust preservation. The authenticated dashboard reports the same box online on 2.3.33 and Prime open. The owner confirmed audio works after the live remote Unmute command, then confirmed signed YouTube TV picture/audio and return to Regular TV Board on this candidate. Provider account sign-in remained attended; no Prime credentials were saved or exported.
+
+The owner approved coordinated runtime/setup publication and dashboard release/provisioning alignment. Exact immutable ZIP SHA256: `a8dee8ef8f41a89fb2346cc4e2ad6e339eecb7ed6d0054f5670e4e3544a89b96`; generated setup SHA256: `3b71b4a6066128ea3c16d1c5e8f3fe390ed2e7cb34dd9e1c5a0b4122cb83d001`. Publication, public-pair verification and companion deployment remain release execution checks. No fleet dispatch is authorized. Prime resume/fullscreen limitations above remain unchanged.

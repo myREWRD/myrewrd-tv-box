@@ -1,9 +1,9 @@
-const PROVIDERS = { youtube: 'https://tv.youtube.com/', youtube_video:'https://www.youtube.com/', hulu: 'https://www.hulu.com/', peacock: 'https://www.peacocktv.com/', espn: 'https://www.espn.com/watch/' };
+const { HOMES: PROVIDERS } = require('./game-day-provider');
 const KEYS = ['Up', 'Down', 'Left', 'Right', 'Return', 'Tab', 'ShiftTab', 'Escape', 'Space'];
 const { mediaMuteCode } = require('./provider-audio');
 function providerPage(value) {
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port
-    && ['youtube.com', 'hulu.com', 'peacocktv.com', 'espn.com'].some(h => u.hostname === h || u.hostname.endsWith(`.${h}`))
+    && (u.hostname === 'www.primevideo.com' || ['youtube.com', 'hulu.com', 'peacocktv.com', 'espn.com'].some(h => u.hostname === h || u.hostname.endsWith(`.${h}`)))
     && !u.hostname.startsWith('accounts.'); } catch { return false; }
 }
 
