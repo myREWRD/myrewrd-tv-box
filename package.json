@@ -1,6 +1,6 @@
 {
   "name": "myrewrd-tv-box",
-  "version": "2.3.31",
+  "version": "2.3.32",
   "description": "myREWRD TV Box - Venue display system with streaming, sponsor overlay, and remote dashboard control",
   "main": "src/main.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "verify:reset-reuse": "node scripts/verify-reset-reuse.cjs && node scripts/verify-reset-cleanup.cjs && node scripts/verify-reset-idle.cjs && node scripts/verify-reset-helper-launch.cjs",
     "verify:protected-playback": "node scripts/verify-protected-playback.cjs",
     "postinstall": "node node_modules/electron/install.js",
-    "verify:presentation": "node scripts/verify-presentation.cjs && node scripts/verify-presentation-receiver.cjs",
+    "verify:presentation": "node scripts/verify-presentation.cjs && node scripts/verify-presentation-receiver.cjs && node scripts/verify-enrollment-branding.cjs",
     "verify:wake-recovery": "node scripts/verify-wake-recovery.cjs",
     "start": "electron .",
     "verify:gameday-sponsor-logo": "node scripts/verify-gameday-sponsor-logo.mjs",
