@@ -2,7 +2,8 @@ const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {randomUUID}=require('node:crypto');
 const {performance}=require('node:perf_hooks');
-const {allowedLoginUrl,playbackReturn,HULU_LOGIN,PEACOCK_LOGIN}=require('./provider-account-login');
+const {playbackReturn}=require('./provider-account-login');
+const {privateStart,privateInteractive,privateNavigation,primeEntry,primeReturn,primeHomeReturn}=require('./private-signin-policy');
 const {denyPrivatePermissions}=require('./private-permissions');
 const {applyProviderUserAgent}=require('./provider-user-agent');
 
@@ -26,9 +27,13 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
   }
   function open(next,deadline){
     stop();blocked=null;session=next;lease=deadline;sequence=-1;boundToken=getToken();boundKey=getKey();onStart();
-    providerWindow=new BrowserWindow({show:false,width:1100,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false,preload:path.join(__dirname,'private-signin-preload.js')}});
+    // The private web channel cannot operate a native Windows authenticator.
+    // Prime must offer its own password/verification alternative; if it does
+    // not, this flow is unsupported. Never open a PIN dialog on the public TV.
+    providerWindow=new BrowserWindow({show:false,width:1100,height:800,skipTaskbar:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,devTools:false,...(next.provider==='prime-video'?{disableBlinkFeatures:'WebAuth'}:{}),preload:path.join(__dirname,'private-signin-preload.js')}});
     const target=providerWindow,contents=target.webContents,run=generation,profile=contents.session;
-    applyProviderUserAgent(contents,next.provider==='peacock'?PEACOCK_LOGIN:HULU_LOGIN);
+    applyProviderUserAgent(contents,privateStart(next.provider));
+    let primeReturned=false,primeEntrySent=false,primeEntryRequest=null,primeEntryTimer=null;
     const current=()=>run===generation&&providerWindow===target&&valid();
     const invalidate=()=>{document=null;settle(false);};
     contents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -38,39 +43,59 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     const download=(event,item,wc)=>{if(wc===contents)event.preventDefault();};
     profile.on('will-download',download);
     target.once('closed',()=>{
+      clearTimeout(primeEntryTimer);
       profile.removeListener('will-download',download);
       releasePermissions();
     });
     for(const name of ['will-navigate','will-redirect'])contents.on(name,(event,url,_inPlace,main)=>{
       const destination=event.url??url;
-      if(!allowedLoginUrl(destination,next.provider)&&!playbackReturn(destination,next.provider)){
+      if(!privateNavigation(destination,next.provider)){
         event.preventDefault();if((event.isMainFrame??main)!==false)stop();
       }
+      if(next.provider==='prime-video'&&(event.isMainFrame??main)!==false&&primeReturn(destination))primeReturned=true;
     });
     contents.on('did-start-navigation',(_event,_url,inPlace,main)=>{if(main!==false&&!inPlace)invalidate();});
-    contents.on('did-navigate',(_event,url)=>{invalidate();if(current()&&playbackReturn(url,next.provider))stop();});
+    const returned=url=>next.provider==='prime-video'?primeReturned&&primeHomeReturn(url):playbackReturn(url,next.provider);
+    contents.on('did-navigate',(_event,url)=>{invalidate();if(current()&&returned(url))stop();});
+    contents.on('did-navigate',(_event,url)=>{
+      if(next.provider==='prime-video'&&!primeEntry(url)){clearTimeout(primeEntryTimer);primeEntryRequest=null;}
+    });
     contents.on('did-navigate-in-page',(_event,url,main)=>{
       if(main===false)return;
-      if(current()&&playbackReturn(url,next.provider)){stop();return;}
+      if(current()&&returned(url)){stop();return;}
       settle(false);
-      if(document&&document.frame===contents.mainFrame&&allowedLoginUrl(url,next.provider))document={...document,url,generation:randomUUID()};
+      if(document&&document.frame===contents.mainFrame&&privateInteractive(url,next.provider))document={...document,url,generation:randomUUID()};
       else document=null;
     });
     contents.on('render-process-gone',stop);
     contents.ipc.on('tv-signin-ready',(event,message)=>{
-      if(!current()||event.sender!==contents||event.senderFrame!==contents.mainFrame||!allowedLoginUrl(event.senderFrame.url,next.provider)||!/^[a-f0-9-]{36}$/i.test(message?.documentId||''))return;
+      if(!current()||event.sender!==contents||event.senderFrame!==contents.mainFrame||!/^[a-f0-9-]{36}$/i.test(message?.documentId||''))return;
+      if(next.provider==='prime-video'&&primeEntry(event.senderFrame.url)) {
+        // Connect Account authorizes opening the provider's actual contextual
+        // sign-in link. Home exposes no capture, text or general pointer input.
+        if(!primeEntrySent){
+          primeEntrySent=true;primeEntryRequest={id:randomUUID(),documentId:message.documentId,url:event.senderFrame.url,frame:event.senderFrame};
+          primeEntryTimer=setTimeout(()=>{if(current()&&primeEntry(contents.getURL()))stop();},12000);
+          event.senderFrame.send('tv-signin-command',{id:primeEntryRequest.id,documentId:message.documentId,url:event.senderFrame.url,command:{type:'prime-entry'}});
+        }
+        return;
+      }
+      if(!privateInteractive(event.senderFrame.url,next.provider))return;
       settle(false);document={id:message.documentId,frame:event.senderFrame,url:event.senderFrame.url,generation:randomUUID()};
     });
     contents.ipc.on('tv-signin-result',(event,message)=>{
+      if(current()&&primeEntryRequest&&event.sender===contents&&event.senderFrame===primeEntryRequest.frame&&event.senderFrame.url===primeEntryRequest.url&&message?.documentId===primeEntryRequest.documentId&&message.id===primeEntryRequest.id){
+        if(message.applied!==true)stop();return;
+      }
       if(!current()||!document||!pending||event.sender!==contents||event.senderFrame!==document.frame||event.senderFrame.url!==document.url||message?.documentId!==document.id||message.id!==pending.id)return;
       settle(message.applied===true);
     });
-    contents.on('did-finish-load',()=>{if(current()&&playbackReturn(contents.getURL(),next.provider))stop();});
+    contents.on('did-finish-load',()=>{if(current()&&returned(contents.getURL()))stop();});
     transport=new BrowserWindow({show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,partition:'tv-private-signin-transport',preload:path.join(__dirname,'private-signin-transport-preload.js')}});
     transport.webContents.setWindowOpenHandler(()=>({action:'deny'}));
     transport.webContents.on('will-navigate',e=>e.preventDefault());transport.webContents.on('render-process-gone',stop);
     transport.loadFile(file).catch(()=>{if(current())stop();});
-    void contents.loadURL(next.provider==='peacock'?PEACOCK_LOGIN:HULU_LOGIN).catch(()=>{/* Readiness or lease expiry governs stalled provider loads. */});
+    void contents.loadURL(privateStart(next.provider)).catch(()=>{/* Readiness or lease expiry governs stalled provider loads. */});
   }
   ipcMain.handle('tv-signin-state',event=>trusted(event)?session:null);
   ipcMain.handle('tv-signin-answer',async(event,answer)=>{
@@ -83,7 +108,7 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     const capture={};capturing=capture;lastCapture=performance.now();const doc=document,target=providerWindow,run=generation;
     try {
       const image=await target.webContents.capturePage();
-      if(!valid()||run!==generation||document!==doc||target!==providerWindow||target.webContents.getURL()!==doc.url||!allowedLoginUrl(doc.url,session.provider))return null;
+      if(!valid()||run!==generation||document!==doc||target!==providerWindow||target.webContents.getURL()!==doc.url||!privateInteractive(doc.url,session.provider))return null;
       let jpeg=image.resize({width:960}).toJPEG(50);
       if(jpeg.length>60000)jpeg=image.resize({width:640}).toJPEG(30);
       return jpeg.length<=60000?{generation:doc.generation,jpeg:jpeg.toString('base64')}:null;
@@ -93,7 +118,7 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     if(!trusted(event)||!document||pending||!Number.isSafeInteger(envelope?.seq)||envelope.seq<=sequence||envelope.generation!==document.generation||performance.now()-lastInput<40)return false;
     const c=envelope.command;
     if(!c||!['point','text','erase','tab','scroll'].includes(c.type)||JSON.stringify(c).length>7000)return false;
-    if(providerWindow.webContents.getURL()!==document.url||!allowedLoginUrl(document.url,session.provider))return false;
+    if(providerWindow.webContents.getURL()!==document.url||!privateInteractive(document.url,session.provider))return false;
     sequence=envelope.seq;lastInput=performance.now();
     return new Promise(resolve=>{
       const id=randomUUID();pending={id,resolve,timer:setTimeout(()=>settle(false),1000)};
@@ -108,7 +133,7 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
       const data=await request({});
       if(run!==generation||token!==getToken()||key!==getKey())return;
       const next=data.session;
-      if(!canStart()||next?.kind!=='provider-sign-in'||!['hulu','peacock'].includes(next.provider)||!next.offer||next.id===blocked){if(session)stop();return;}
+      if(!canStart()||next?.kind!=='provider-sign-in'||!['hulu','peacock','prime-video'].includes(next.provider)||!next.offer||next.id===blocked){if(session)stop();return;}
       const deadline=started+Math.min(8000,Number(next.lease_ms)||0);
       if(deadline<=performance.now()){if(session)stop();return;}
       if(session?.id!==next.id)open(next,deadline);else lease=deadline;
