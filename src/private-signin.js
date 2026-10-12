@@ -7,15 +7,23 @@ const {privateStart,privateInteractive,privateNavigation,primeEntry,primeReturn,
 const {denyPrivatePermissions}=require('./private-permissions');
 const {applyProviderUserAgent}=require('./provider-user-agent');
 
-function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canStart,onStart,fetcher=(...args)=>fetch(...args)}) {
+function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canStart,onStart,fetcher=(...args)=>fetch(...args),diagnose=()=>{}}) {
   const file=path.join(__dirname,'pages','private-signin.html');
   let providerWindow=null,transport=null,session=null,lease=0,generation=0,document=null,pending=null;
   let polling=false,capturing=null,blocked=null,sequence=-1,lastCapture=0,lastInput=0;
   let boundToken=null,boundKey=null;
+  let history=[];
+  const reasons=new Set(['opened','external_stop','replaced','navigation_denied','provider_return','provider_renderer_gone','transport_renderer_gone','lease_expired','binding_changed','control_unavailable','provider_window_lost','server_session_unavailable','entry_timeout','entry_unavailable','transport_load_failed','capture_failed']);
+  function record(reason){
+    if(!reasons.has(reason))return;
+    history=[...history,{reason,at:new Date().toISOString()}].slice(-16);
+    try{diagnose({events:history});}catch{/* Fixed diagnostics never affect authentication. */}
+  }
   const valid=()=>Boolean(session&&performance.now()<lease&&getToken()===boundToken&&getKey()===boundKey&&canStart()&&providerWindow&&!providerWindow.isDestroyed());
   const trusted=event=>valid()&&transport&&!transport.isDestroyed()&&event.sender===transport.webContents&&event.senderFrame===transport.webContents.mainFrame&&event.senderFrame.url===pathToFileURL(file).href;
   const settle=value=>{if(pending){clearTimeout(pending.timer);const resolve=pending.resolve;pending=null;resolve(value);}};
-  function stop(){
+  function stop(reason='external_stop'){
+    if(session)record(reason);
     generation++;if(session)blocked=session.id;
     session=null;lease=0;document=null;capturing=null;boundToken=null;boundKey=null;settle(false);
     if(transport&&!transport.isDestroyed())transport.destroy();transport=null;
@@ -26,7 +34,7 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     if(!response.ok)throw Error('Unavailable');return response.json();
   }
   function open(next,deadline){
-    stop();blocked=null;session=next;lease=deadline;sequence=-1;boundToken=getToken();boundKey=getKey();onStart();
+    stop('replaced');blocked=null;session=next;lease=deadline;sequence=-1;boundToken=getToken();boundKey=getKey();onStart();record('opened');
     // The private web channel cannot operate a native Windows authenticator.
     // Prime must offer its own password/verification alternative; if it does
     // not, this flow is unsupported. Never open a PIN dialog on the public TV.
@@ -50,24 +58,24 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     for(const name of ['will-navigate','will-redirect'])contents.on(name,(event,url,_inPlace,main)=>{
       const destination=event.url??url;
       if(!privateNavigation(destination,next.provider)){
-        event.preventDefault();if((event.isMainFrame??main)!==false)stop();
+        event.preventDefault();if((event.isMainFrame??main)!==false)stop('navigation_denied');
       }
       if(next.provider==='prime-video'&&(event.isMainFrame??main)!==false&&primeReturn(destination))primeReturned=true;
     });
     contents.on('did-start-navigation',(_event,_url,inPlace,main)=>{if(main!==false&&!inPlace)invalidate();});
     const returned=url=>next.provider==='prime-video'?primeReturned&&primeHomeReturn(url):playbackReturn(url,next.provider);
-    contents.on('did-navigate',(_event,url)=>{invalidate();if(current()&&returned(url))stop();});
+    contents.on('did-navigate',(_event,url)=>{invalidate();if(current()&&returned(url))stop('provider_return');});
     contents.on('did-navigate',(_event,url)=>{
       if(next.provider==='prime-video'&&!primeEntry(url)){clearTimeout(primeEntryTimer);primeEntryRequest=null;}
     });
     contents.on('did-navigate-in-page',(_event,url,main)=>{
       if(main===false)return;
-      if(current()&&returned(url)){stop();return;}
+      if(current()&&returned(url)){stop('provider_return');return;}
       settle(false);
       if(document&&document.frame===contents.mainFrame&&privateInteractive(url,next.provider))document={...document,url,generation:randomUUID()};
       else document=null;
     });
-    contents.on('render-process-gone',stop);
+    contents.on('render-process-gone',()=>stop('provider_renderer_gone'));
     contents.ipc.on('tv-signin-ready',(event,message)=>{
       if(!current()||event.sender!==contents||event.senderFrame!==contents.mainFrame||!/^[a-f0-9-]{36}$/i.test(message?.documentId||''))return;
       if(next.provider==='prime-video'&&primeEntry(event.senderFrame.url)) {
@@ -75,7 +83,7 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
         // sign-in link. Home exposes no capture, text or general pointer input.
         if(!primeEntrySent){
           primeEntrySent=true;primeEntryRequest={id:randomUUID(),documentId:message.documentId,url:event.senderFrame.url,frame:event.senderFrame};
-          primeEntryTimer=setTimeout(()=>{if(current()&&primeEntry(contents.getURL()))stop();},12000);
+          primeEntryTimer=setTimeout(()=>{if(current()&&primeEntry(contents.getURL()))stop('entry_timeout');},12000);
           event.senderFrame.send('tv-signin-command',{id:primeEntryRequest.id,documentId:message.documentId,url:event.senderFrame.url,command:{type:'prime-entry'}});
         }
         return;
@@ -85,16 +93,16 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
     });
     contents.ipc.on('tv-signin-result',(event,message)=>{
       if(current()&&primeEntryRequest&&event.sender===contents&&event.senderFrame===primeEntryRequest.frame&&event.senderFrame.url===primeEntryRequest.url&&message?.documentId===primeEntryRequest.documentId&&message.id===primeEntryRequest.id){
-        if(message.applied!==true)stop();return;
+        if(message.applied!==true)stop('entry_unavailable');return;
       }
       if(!current()||!document||!pending||event.sender!==contents||event.senderFrame!==document.frame||event.senderFrame.url!==document.url||message?.documentId!==document.id||message.id!==pending.id)return;
       settle(message.applied===true);
     });
-    contents.on('did-finish-load',()=>{if(current()&&returned(contents.getURL()))stop();});
+    contents.on('did-finish-load',()=>{if(current()&&returned(contents.getURL()))stop('provider_return');});
     transport=new BrowserWindow({show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,backgroundThrottling:false,partition:'tv-private-signin-transport',preload:path.join(__dirname,'private-signin-transport-preload.js')}});
     transport.webContents.setWindowOpenHandler(()=>({action:'deny'}));
-    transport.webContents.on('will-navigate',e=>e.preventDefault());transport.webContents.on('render-process-gone',stop);
-    transport.loadFile(file).catch(()=>{if(current())stop();});
+    transport.webContents.on('will-navigate',e=>e.preventDefault());transport.webContents.on('render-process-gone',()=>stop('transport_renderer_gone'));
+    transport.loadFile(file).catch(()=>{if(current())stop('transport_load_failed');});
     void contents.loadURL(privateStart(next.provider)).catch(()=>{/* Readiness or lease expiry governs stalled provider loads. */});
   }
   ipcMain.handle('tv-signin-state',event=>trusted(event)?session:null);
@@ -112,7 +120,7 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
       let jpeg=image.resize({width:960}).toJPEG(50);
       if(jpeg.length>60000)jpeg=image.resize({width:640}).toJPEG(30);
       return jpeg.length<=60000?{generation:doc.generation,jpeg:jpeg.toString('base64')}:null;
-    }catch{if(run===generation&&target===providerWindow)stop();return null;}finally{if(capturing===capture)capturing=null;}
+    }catch{if(run===generation&&target===providerWindow)stop('capture_failed');return null;}finally{if(capturing===capture)capturing=null;}
   });
   ipcMain.handle('tv-signin-input',(event,envelope)=>{
     if(!trusted(event)||!document||pending||!Number.isSafeInteger(envelope?.seq)||envelope.seq<=sequence||envelope.generation!==document.generation||performance.now()-lastInput<40)return false;
@@ -127,19 +135,21 @@ function createPrivateSignIn({BrowserWindow,ipcMain,apiBase,getToken,getKey,canS
   });
   async function tick(){
     if(polling)return;
-    if(!canStart()||!getToken()||!getKey()){if(session)stop();return;}
+    if(!canStart()||!getToken()||!getKey()){if(session)stop('control_unavailable');return;}
     polling=true;const run=generation,token=getToken(),key=getKey(),started=performance.now();
     try{
       const data=await request({});
       if(run!==generation||token!==getToken()||key!==getKey())return;
       const next=data.session;
-      if(!canStart()||next?.kind!=='provider-sign-in'||!['hulu','peacock','prime-video'].includes(next.provider)||!next.offer||next.id===blocked){if(session)stop();return;}
+      if(!canStart()||next?.kind!=='provider-sign-in'||!['hulu','peacock','prime-video'].includes(next.provider)||!next.offer||next.id===blocked){if(session)stop('server_session_unavailable');return;}
       const deadline=started+Math.min(8000,Number(next.lease_ms)||0);
-      if(deadline<=performance.now()){if(session)stop();return;}
+      if(deadline<=performance.now()){if(session)stop('lease_expired');return;}
       if(session?.id!==next.id)open(next,deadline);else lease=deadline;
     }catch{/* A failed poll never extends the local lease. */}finally{polling=false;}
   }
-  const timer=setInterval(tick,3000),watchdog=setInterval(()=>{if(session&&!valid())stop();},100);
+  const timer=setInterval(tick,3000),watchdog=setInterval(()=>{
+    if(session&&!valid())stop(performance.now()>=lease?'lease_expired':getToken()!==boundToken||getKey()!==boundKey?'binding_changed':!canStart()?'control_unavailable':'provider_window_lost');
+  },100);
   return {tick,stop,get active(){return Boolean(session);},dispose(){clearInterval(timer);clearInterval(watchdog);stop();}};
 }
 module.exports={createPrivateSignIn};

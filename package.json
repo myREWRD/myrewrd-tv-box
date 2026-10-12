@@ -22,7 +22,7 @@
     "verify:update": "node scripts/verify-update.cjs",
     "build:win-installed": "node scripts/build-protected-windows.cjs",
     "verify:provider-remote": "node scripts/verify-provider-remote.cjs",
-    "verify:provider-accounts": "node scripts/verify-provider-accounts.cjs && node scripts/verify-provider-account-form.cjs",
+    "verify:provider-accounts": "node scripts/verify-provider-accounts.cjs && node scripts/verify-provider-account-form.cjs && node scripts/verify-provider-account-outcome.cjs",
     "verify:private-signin": "node scripts/verify-private-signin.cjs && node scripts/verify-private-prime-policy.cjs && node scripts/verify-private-prime-entry.cjs"
   },
   "build": {

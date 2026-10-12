@@ -1,9 +1,9 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {EventEmitter}=require('node:events');
 const {pathToFileURL}=require('node:url');
-function fixture(provider='peacock'){
+function fixture(provider='peacock',diagnosticThrows=false){
   let now=1000,allowed=true,reply={session:{kind:'provider-sign-in',id:'first',provider,lease_ms:8000,offer:{type:'offer',sdp:'v=0'}}};
-  const handlers={},windows=[],timers=[],entryTimers=[];
+  const handlers={},windows=[],timers=[],entryTimers=[],diagnostics=[];let replacement=0;
   class Window extends EventEmitter{
     constructor(options){super();this.options=options;windows.push(this);const wc=new EventEmitter();this.webContents=wc;const profile=new EventEmitter();Object.assign(profile,{setPermissionRequestHandler(){},setPermissionCheckHandler(){}});
       Object.assign(wc,{session:profile,ipc:new EventEmitter(),mainFrame:{url:'',send:(channel,value)=>{this.last={channel,value};}},getURL:()=>wc.mainFrame.url,isDestroyed:()=>!!this.destroyed,setWindowOpenHandler(fn){this.popup=fn;},loadURL:async url=>{wc.mainFrame.url=url;},capturePage:async()=>({resize:()=>({toJPEG:()=>Buffer.from('fixture')})})});
@@ -16,10 +16,10 @@ function fixture(provider='peacock'){
     clearTimeout:timer=>{if(entryTimers.includes(timer))timer.cleared=true;else clearTimeout(timer);},
     setInterval:fn=>{timers.push(fn);return fn;},clearInterval(){},require:name=>name==='node:perf_hooks'?{performance:{now:()=>now}}:name.startsWith('./')?require('../src/'+name.slice(2)):require(name)};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/private-signin.js'),'utf8'),context);
-  const remote=context.module.exports.createPrivateSignIn({BrowserWindow:Window,ipcMain:{handle:(name,fn)=>handlers[name]=fn},apiBase:'https://fixture.invalid',getToken:()=> 'fixture',getKey:()=> 'fixture',canStart:()=>allowed,onStart(){},fetcher:async()=>({ok:true,json:async()=>reply})});
+  const remote=context.module.exports.createPrivateSignIn({BrowserWindow:Window,ipcMain:{handle:(name,fn)=>handlers[name]=fn},apiBase:'https://fixture.invalid',getToken:()=> 'fixture',getKey:()=> 'fixture',canStart:()=>allowed,onStart(){},diagnose:record=>{if(diagnosticThrows)throw Error('synthetic write failure');diagnostics.push(JSON.parse(JSON.stringify(record)));},fetcher:async()=>({ok:true,json:async()=>reply})});
   const event=wc=>({sender:wc,senderFrame:wc.mainFrame});
   const ready=()=>{const wc=windows.at(-2).webContents;wc.ipc.emit('tv-signin-ready',event(wc),{documentId:'11111111-1111-4111-8111-111111111111'});};
-  return {remote,windows,handlers,timers,entryTimers,event,ready,next:()=>{reply={session:{...reply.session,id:'second'}};},advance:ms=>now+=ms,deny:()=>allowed=false,
+  return {remote,windows,handlers,timers,entryTimers,diagnostics,event,ready,next:()=>{reply={session:{...reply.session,id:`replacement-${++replacement}`}};},advance:ms=>now+=ms,deny:()=>allowed=false,
     invoke:(name,...args)=>handlers[name](event(windows.at(-1).webContents),...args)};
 }
 (async()=>{
@@ -37,7 +37,9 @@ function fixture(provider='peacock'){
     f.advance(250);const second=await f.invoke('tv-signin-frame');assert.notEqual(second.generation,image.generation);
     wc.mainFrame.url='https://www.peacocktv.com/watch/home';wc.emit('did-navigate-in-page',{},wc.getURL(),true);
     assert.equal(f.remote.active,false,'SPA completion closes private windows');assert.ok(f.windows.every(w=>w.destroyed));
+    assert.equal(f.diagnostics.at(-1).events.at(-1).reason,'provider_return');
     f.next();await f.remote.tick();f.ready();f.advance(9000);f.timers.at(-1)();assert.equal(f.remote.active,false,'lease stops without a server response');
+    assert.equal(f.diagnostics.at(-1).events.at(-1).reason,'lease_expired');
   }finally{f.remote.dispose();}
   for(const reject of [false,true]){
     const f=fixture();try{
@@ -83,5 +85,20 @@ function fixture(provider='peacock'){
   const first={session:profile},second={session:profile};const release1=denyPrivatePermissions(first),release2=denyPrivatePermissions(second);
   assert.equal(check(first,'fullscreen'),false);assert.equal(check({},'media'),false);assert.equal(check({},'mediaKeySystem'),true);
   release1();assert.equal(check(second,'fullscreen'),false);release1();assert.equal(typeof request,'function');release2();assert.equal(check,null);
+  for(const [event,reason,index] of [['will-redirect','navigation_denied',0],['render-process-gone','provider_renderer_gone',0],['render-process-gone','transport_renderer_gone',1]]){
+    const d=fixture();try{
+      await d.remote.tick();d.windows[index].webContents.emit(event,{isMainFrame:true,url:'https://unapproved.invalid/private-secret-marker',preventDefault(){}},{reason:'private-secret-marker'});
+      assert.equal(d.remote.active,false);assert.equal(d.diagnostics.at(-1).events.at(-1).reason,reason);
+      assert.equal(JSON.stringify(d.diagnostics).includes('private-secret-marker'),false);
+      for(const record of d.diagnostics)for(const e of record.events)assert.deepEqual(Object.keys(e).sort(),['at','reason']);
+    }finally{d.remote.dispose();}
+  }
+  const bounded=fixture();try{
+    for(let i=0;i<12;i++){bounded.next();await bounded.remote.tick();bounded.remote.stop();}
+    assert.equal(bounded.diagnostics.at(-1).events.length,16,'fixed diagnostic history is bounded');
+    const before=bounded.diagnostics.length;bounded.next();await bounded.remote.tick();bounded.remote.stop('private-secret-marker');
+    assert.equal(bounded.diagnostics.length,before+1,'unrecognized diagnostic values are discarded');
+  }finally{bounded.remote.dispose();}
+  const unwritable=fixture('hulu',true);try{await unwritable.remote.tick();assert.equal(unwritable.remote.active,true,'diagnostic write failure cannot stop authentication');unwritable.remote.stop();assert.equal(unwritable.remote.active,false);}finally{unwritable.remote.dispose();}
   console.log('PASS private sign-in: hidden sandbox, IPC identity, stale input, SPA completion, leases, stale captures, shared permission ownership.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

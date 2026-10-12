@@ -180,6 +180,7 @@ const providerAccounts=createProviderAccounts({BrowserWindow,apiBase:API_BASE,fe
   onPrivateStart:()=>{privateSignIn.stop();liveRemote.stop();providerResume.cancel();}});
 
 const privateSignIn=createPrivateSignIn({BrowserWindow,ipcMain,apiBase:API_BASE,fetcher:fetch,getToken:()=>config.tvToken,getKey:()=>presentationKey,
+  diagnose:record=>fs.writeFileSync(path.join(app.getPath('userData'),'private-signin-status.json'),JSON.stringify(record)),
   canStart:()=>Boolean(config.paired&&!handoffRequested&&(!updateCandidate||updateCandidate.active)&&!isUpdating&&!presentation.active&&!providerWindows.size&&!providerAccounts.active),
   onStart:()=>{providerAccounts.stop();liveRemote.stop();providerResume.cancel();}});
 

@@ -71,9 +71,12 @@ async function runHuluLogin({BrowserWindow,job,signal,isCurrent=()=>true,now=Dat
       while(!signal.aborted&&isCurrent()&&!window.isDestroyed()&&(remaining?remaining()>12000:now()<Date.parse(job.expires_at)-12000)) {
         if(navigationFailed)return finish('failed','navigation_failed');
         if(denied)return finish('manual_required','redirect_blocked');
-        if(permissionRequested)return finish('manual_required','permission_required');
         const url=contents.getURL();
+        // A denied permission on an already-returned playback page does not
+        // undo recorded password submission. This remains only "submitted";
+        // provider authentication and entitled playback require verification.
         if(playbackReturn(url,provider))return finish(passwordSubmitted?'submitted':'manual_required',passwordSubmitted?'password_submitted':'existing_session');
+        if(permissionRequested)return finish('manual_required','permission_required');
         if(!url||url==='about:blank'){await delay(250);continue;}
         if(!allowedLoginUrl(url,provider))return finish('manual_required','document_blocked');
         const pathname=new URL(url).pathname;
