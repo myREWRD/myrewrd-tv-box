@@ -1,5 +1,7 @@
 # AGENTS.md — myREWRD TV Box (`myrewrd-tv-box`)
 
+[OWNER-APPROVED 2026-10-19] The [canonical operating model](https://github.com/myREWRD/ssdt-dashboard/blob/main/docs/operations/RISK_TIERED_VERIFICATION.md) governs the scope of the mandatory workflows below: Quick Fix, Standard and Critical depend on actual changed behavior. Always read this file and the [Knowledge Pack core instructions](https://github.com/myREWRD/ssdt-dashboard/blob/main/docs/knowledge-pack/00-START-HERE.md); retrieve relevant domain/current-work sections and history as needed. The Knowledge Pack remains mandatory, permanent institutional knowledge; completeness, accuracy, validation and sensitive release safeguards are unchanged. Implementation/merge approval persists only within its explicit scope.
+
 > **Read before editing or releasing.** This public repository builds the unattended Windows Electron appliance installed at venues. A selected push to `main` can publish a GitHub Release consumed by deployed boxes.
 
 ## Platform source of truth
@@ -10,11 +12,11 @@ Use this evidence order: **verified live state → current config on `origin/mai
 
 ## Mandatory Pre-Task Workflow
 
-Before implementation, identify affected repositories/services; read this guide and relevant dashboard canonical docs; fetch and fast-forward current `origin/main`; inspect current client/API/updater implementation and Git history when rationale is unclear; identify device/venue scope, public-display privacy, older AppData/payload compatibility, Windows/updater/release, hardware/unattended, dashboard, and knowledge impact; and define validation, recovery, and review. Do not publish or download-run untrusted artifacts during investigation.
+Apply the [canonical operating model](https://github.com/myREWRD/ssdt-dashboard/blob/main/docs/operations/RISK_TIERED_VERIFICATION.md): read target rules and Knowledge Pack core instructions, fetch current main, inspect affected implementation/direct dependencies, and record outcome, actual-risk tier, checks, knowledge impact and delivery authority. Retrieve domain/history sections as relevant; expand cross-repository investigation only for affected dependencies or unclear compatibility. Use a focused branch and PR. Existing domain, security and release requirements below remain mandatory where applicable; do not publish or run release artifacts during investigation.
 
 ## Mandatory Knowledge Maintenance
 
-Every task must assess durable impact on pairing, commands, device/venue authorization, TV modes, public payloads, updater/release contracts, AppData/config formats, hardware, and dashboard APIs. When affected, update repository and dashboard documentation/generated references in the **same pull request**. A task is incomplete when code changes but durable knowledge remains stale; important findings must not remain only in chat. This applies to every agent and human developer.
+Every task must assess documentation impact under the canonical operating model. Sessions with no durable change need no writeback or repetitive receipt PR. A completed task must leave relevant Knowledge Pack facts accurate. Assess durable impact on pairing, commands, device/venue authorization, TV modes, public payloads, updater/release contracts, AppData/config formats, hardware, and dashboard APIs. When affected, update affected repository documentation/generated references in the **same pull request** and use linked companion PRs for genuinely necessary dashboard updates. A task is incomplete when code changes but durable knowledge remains stale; important findings must not remain only in chat. This applies to every agent and human developer.
 
 ## Architecture
 
@@ -65,7 +67,7 @@ Manual Windows validation must cover clean pairing, saved configuration, every c
 
 Before completion, confirm the diff is limited to approved scope; pairing, device/venue/invalid-token cases, commands/modes, privacy, offline/reconnect/restart, older config/payloads, Windows artifact, actual updater path, release consequence, and recovery were checked where relevant; no secret or unauthorized release occurred; docs/generated references were updated and verified; and the PR states code, knowledge, release, and device-recovery impact.
 
-Authentication/authorization, device tokens, dashboard APIs, updater/release workflows, Windows artifacts, navigation/privacy, secrets, deployment infrastructure, or destructive behavior require human review or a **second independent AI review** of the actual diff/current code plus human approval before production.
+Material changes to authentication/authorization, device tokens, dashboard API contracts, updater/release workflows, Windows artifacts, navigation/privacy, secrets, deployment infrastructure, or destructive behavior require human review or a **second independent AI review** of the actual diff/current code plus human approval before production.
 
 ## Pull request and release
 
